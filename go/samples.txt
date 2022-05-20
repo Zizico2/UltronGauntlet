@@ -10,3 +10,7 @@ A informação sobre a abertura ou não de vagas neste par instituição/curso n
 https://www.dges.gov.pt/guias/detcursopi.asp?codc=8519&code=3063
 
 Provas de ingresso com "   e": https://www.dges.gov.pt/guias/detcursopi.asp?codc=9252&code=0300
+
+
+Changed vscode settings:    json.maxItemsComputed
+                            editor.foldingMaximumRegions
