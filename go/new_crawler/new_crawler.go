@@ -57,32 +57,48 @@ const (
 	examsTypeGroups
 )
 
-type exam struct {
-	Code uint8
+type Exam struct {
+	Code uint
 	Name string
 }
 
-type examGroup []exam
+type ExamGroup []Exam
 
-type courseInfo struct {
-	CourseName        string //! not needed
-	InstitutionName   string //! not needed
-	CourseCode        string // foreign key
-	InstitutionCode   string // foreign key
-	Degree            string // foreign key
-	Ects              string
-	Cnaef             string        // split into code + name
-	Duration          string        // duration struct
-	Ctype             string        // foreign key
-	Contest           string        // foreign key
-	MandatoryExams    []exam        // must do every exam on this list
-	SingleChoiceExams [][]exam      // must choose an exam from every array on this matrix
-	GroupChoiceExams  [][]examGroup // must choose an examGroup from every array on this matrix
+type CNAEF struct {
+	Code uint
+	Name string
+}
+
+type Course struct {
+	Code string
+	Name string
+}
+
+type Institution struct {
+	Code          string
+	Name          string
+	EducationType string
+}
+
+type Duration struct {
+	Ammount uint
+	Unit    string
+}
+
+type Entry struct {
+	Course         Course
+	Institution    Institution
+	Degree         string // foreign key
+	ECTS           uint
+	CNAEF          CNAEF         // split into code + name
+	Duration       Duration      // duration struct    // foreign key
+	Contest        string        // foreign key
+	MandatoryExams []Exam        // must do every exam on this list
+	OptionalExams  [][]ExamGroup // must choose an examGroup from every array on this matrix
 }
 
 func main() {
-
-	m := []courseInfo{}
+	m := []Entry{}
 
 	c := colly.NewCollector()
 	c.Limit(&colly.LimitRule{
@@ -100,9 +116,9 @@ func main() {
 	})
 
 	c.OnHTML("div#caixa-orange", func(e *colly.HTMLElement) {
-		course := courseInfo{}
-		course.CourseName = e.ChildText("div.cab1")
-		course.InstitutionName = e.ChildText("div.cab2")
+		course := Entry{}
+		course.Course.Name = e.ChildText("div.cab1")
+		course.Institution.Name = e.ChildText("div.cab2")
 		examsStage := examsStageUndefined
 
 		init := false
@@ -128,16 +144,18 @@ func main() {
 							split := strings.SplitN(text, " ", 2)
 							courseName := strings.TrimSpace(split[1])
 							exam_code, _ := strconv.ParseUint(possibleInt, 10, 8) //!catch this error and panic more gracefully
-							course.MandatoryExams = append(course.MandatoryExams, exam{uint8(exam_code), courseName})
+							course.MandatoryExams = append(course.MandatoryExams, Exam{uint(exam_code), courseName})
 						} else {
 							switch text {
 							case "Uma das seguintes provas:": //? maybe enum
 								examsStage = examsStageSingleChoice
-								course.SingleChoiceExams = append(course.SingleChoiceExams, []exam{})
+
+								course.OptionalExams = append(course.OptionalExams, []ExamGroup{})
+
 							case "Um dos seguintes conjuntos:": //? maybe enum
 								examsStage = examsStageGroupChoice
-								course.GroupChoiceExams = append(course.GroupChoiceExams, []examGroup{})
-								course.GroupChoiceExams[len(course.GroupChoiceExams)-1] = append(course.GroupChoiceExams[len(course.GroupChoiceExams)-1], []exam{})
+								course.OptionalExams = append(course.OptionalExams, []ExamGroup{})
+								course.OptionalExams[len(course.OptionalExams)-1] = append(course.OptionalExams[len(course.OptionalExams)-1], []Exam{})
 							}
 						}
 					} else {
@@ -150,22 +168,23 @@ func main() {
 								courseName := strings.TrimSpace(split[1])
 								possibleInt := strings.TrimSpace(split[0])
 								exam_code, _ := strconv.ParseUint(possibleInt, 10, 8) //!catch this error and panic more gracefully
-								course.MandatoryExams = append(course.MandatoryExams, exam{uint8(exam_code), courseName})
+								course.MandatoryExams = append(course.MandatoryExams, Exam{uint(exam_code), courseName})
 							case examsStageSingleChoice:
 								split := strings.SplitN(text, " ", 2)
 								courseName := strings.TrimSpace(split[1])
 								possibleInt := strings.TrimSpace(split[0])
 								exam_code, _ := strconv.ParseUint(possibleInt, 10, 8) //!catch this error and panic more gracefully
-								course.SingleChoiceExams[len(course.SingleChoiceExams)-1] = append(course.SingleChoiceExams[len(course.SingleChoiceExams)-1], exam{uint8(exam_code), courseName})
+								course.OptionalExams[len(course.OptionalExams)-1] = append(course.OptionalExams[len(course.OptionalExams)-1], []Exam{})
+								course.OptionalExams[len(course.OptionalExams)-1][len(course.OptionalExams[len(course.OptionalExams)-1])-1] = append(course.OptionalExams[len(course.OptionalExams)-1][len(course.OptionalExams[len(course.OptionalExams)-1])-1], Exam{uint(exam_code), courseName})
 							case examsStageGroupChoice:
 								if text == (nbsp + nbsp + nbsp + nbsp + nbsp + nbsp + "ou") {
-									course.GroupChoiceExams[len(course.GroupChoiceExams)-1] = append(course.GroupChoiceExams[len(course.GroupChoiceExams)-1], []exam{})
+									course.OptionalExams[len(course.OptionalExams)-1] = append(course.OptionalExams[len(course.OptionalExams)-1], []Exam{})
 								} else {
 									split := strings.SplitN(text, " ", 2)
 									courseName := strings.TrimSpace(split[1])
 									possibleInt := strings.TrimSpace(split[0])
 									exam_code, _ := strconv.ParseUint(possibleInt, 10, 8) //!catch this error and panic more gracefully
-									course.GroupChoiceExams[len(course.GroupChoiceExams)-1][len(course.GroupChoiceExams[len(course.GroupChoiceExams)-1])-1] = append(course.GroupChoiceExams[len(course.GroupChoiceExams)-1][len(course.GroupChoiceExams[len(course.GroupChoiceExams)-1])-1], exam{uint8(exam_code), courseName})
+									course.OptionalExams[len(course.OptionalExams)-1][len(course.OptionalExams[len(course.OptionalExams)-1])-1] = append(course.OptionalExams[len(course.OptionalExams)-1][len(course.OptionalExams[len(course.OptionalExams)-1])-1], Exam{uint(exam_code), courseName})
 								}
 							default:
 							}
@@ -181,25 +200,35 @@ func main() {
 			} else if strings.Contains(text, "ECTS: ") {
 				split := strings.Split(text, "ECTS: ")
 				ects := strings.TrimSpace(split[1])
-				course.Ects = ects
+				parsedECTS, err := strconv.ParseUint(ects, 10, 32)
+				if err == nil {
+					course.ECTS = uint(parsedECTS)
+				}
 			} else if strings.Contains(text, "Área CNAEF: ") {
 				split := strings.Split(text, "Área CNAEF: ")
-				cnaef := strings.TrimSpace(split[1])
-				course.Cnaef = cnaef
+				cnaef := strings.Split(strings.TrimSpace(split[1]), " ")
+				course.CNAEF.Name = strings.TrimSpace(cnaef[1])
+				CNAEFName, err := strconv.ParseUint(strings.TrimSpace(cnaef[0]), 10, 32)
+				if err == nil {
+					course.CNAEF.Code = uint(CNAEFName)
+				}
 			} else if strings.Contains(text, "Duração: ") {
 				split := strings.Split(text, "Duração: ")
-				duration := strings.TrimSpace(split[1])
-				course.Duration = duration
+				duration := strings.Split(strings.TrimSpace(split[1]), " ")
+				course.Duration.Unit = strings.TrimSpace(duration[1])
+
+				durationAmmount, err := strconv.ParseUint(strings.TrimSpace(duration[0]), 10, 32)
+				if err == nil {
+					course.Duration.Ammount = uint(durationAmmount)
+				}
 			} else if strings.Contains(text, "Código: ") {
 				sub := strings.Split(text, "Código: ")
 				sube := strings.TrimSpace(sub[1])
 				splitSub := strings.Split(sube, "/")
-				course.InstitutionCode = strings.TrimSpace(splitSub[0])
-				course.CourseCode = strings.TrimSpace(splitSub[1])
+				course.Institution.Code = splitSub[0]
+				course.Course.Code = splitSub[1]
 			} else if strings.Contains(text, "Tipo de Ensino: ") {
-				split := strings.Split(text, "Tipo de Ensino: ")
-				ctype := strings.TrimSpace(split[1])
-				course.Ctype = ctype
+				course.Institution.EducationType = parseEducationType(text)
 			} else if strings.Contains(text, "Concurso: ") {
 				split := strings.Split(text, "Concurso: ")
 				contest := strings.TrimSpace(split[1])
@@ -215,7 +244,7 @@ func main() {
 		log.Println("Visiting", r.URL)
 	})
 
-	for r := 'a'; r <= 'z'; r++ {
+	for r := 'z'; r <= 'z'; r++ {
 		R := unicode.ToUpper(r)
 		c.Visit("https://dges.gov.pt/guias/indcurso.asp?letra=" + string(R))
 	}
@@ -243,5 +272,19 @@ func main() {
 
 //export crawl
 func crawl() {
+	a := "hey try"
 
+	if b := strings.Split(a, " "); b[0] == a {
+		fmt.Println("hey")
+	} else if b[1] == "try" {
+		fmt.Println("try")
+	}
+}
+
+// Expects @text to be in this format:
+// Tipo de Ensino: ${placeholder}
+func parseEducationType(text string) string {
+	split := strings.Split(text, "Tipo de Ensino: ")
+	educationType := strings.TrimSpace(split[1])
+	return educationType
 }
