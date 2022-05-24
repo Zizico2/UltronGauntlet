@@ -183,7 +183,6 @@ func main() {
 									possibleInt := strings.TrimSpace(split[0])
 									course.OptionalExams[len(course.OptionalExams)-1][len(course.OptionalExams[len(course.OptionalExams)-1])-1] = append(course.OptionalExams[len(course.OptionalExams)-1][len(course.OptionalExams[len(course.OptionalExams)-1])-1], Exam{possibleInt, courseName})
 								}
-							default:
 							}
 						}
 					}
@@ -193,7 +192,7 @@ func main() {
 			} else if degree, err := parseDegree(text); err == nil {
 				course.Degree = degree
 			} else if ECTS, err := parseECTS(text); err == nil {
-				course.ECTS = uint(ECTS)
+				course.ECTS = ECTS
 			} else if name, code, err := parseCNAEF(text); err == nil {
 				course.CNAEF.Name = name
 				course.CNAEF.Code = code
