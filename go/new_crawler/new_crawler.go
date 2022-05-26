@@ -86,6 +86,24 @@ type Duration struct {
 	Unit    string
 }
 
+type CachedSelection struct {
+	Selection     *goquery.Selection
+	text          string
+	textPopulated bool
+}
+
+func (s CachedSelection) Text() string {
+	if !s.textPopulated {
+		s.text = s.Selection.Text()
+		s.textPopulated = true
+	}
+	return s.text
+}
+
+func makeCachedSelection(s *goquery.Selection) CachedSelection {
+	return CachedSelection{s, "", false}
+}
+
 type Entry struct {
 	Course         Course
 	Institution    Institution
@@ -99,7 +117,7 @@ type Entry struct {
 }
 
 func main() {
-	m := []Entry{}
+	entry := []Entry{}
 
 	c := colly.NewCollector()
 	c.Limit(&colly.LimitRule{
@@ -116,6 +134,39 @@ func main() {
 		}
 	})
 
+	const code = "Código: "
+	OnCharacteristics(c, code, func(text string) {
+		fmt.Println(text)
+	})
+
+	const degree = "Grau: "
+	OnCharacteristics(c, degree, func(text string) {
+		fmt.Println(text)
+	})
+
+	const CNAEF = "Área CNAEF: "
+	OnCharacteristics(c, CNAEF, func(text string) {
+		fmt.Println(text)
+	})
+
+	const duration = "Duração: "
+	OnCharacteristics(c, duration, func(text string) {
+		fmt.Println(text)
+	})
+	const ECTS = "ECTS: "
+	OnCharacteristics(c, ECTS, func(text string) {
+		fmt.Println(text)
+	})
+	const contest = "Concurso: "
+	OnCharacteristics(c, contest, func(text string) {
+		fmt.Println(text)
+	})
+
+	const eduType = "Tipo de Ensino: "
+	OnCharacteristics(c, eduType, func(text string) {
+		fmt.Println(text)
+	})
+
 	c.OnHTML("div#caixa-orange", func(e *colly.HTMLElement) {
 		course := Entry{}
 		course.Course.Name = strings.TrimSpace(e.ChildText("div.cab1"))
@@ -124,29 +175,31 @@ func main() {
 
 		init := false
 
+		characteristicsCounter := 0
 		e.DOM.Find("div.inside2").Contents().Each(func(i int, s *goquery.Selection) {
+			characteristicsCounter++
 			init = true
-			text := s.Text()
+			cs := makeCachedSelection(s)
 			if examsStage != examsStageUndefined && !s.Is("br") { //TODO Maybe this should be more fine-grained
 				if s.Is("a") { //TODO Maybe this should be more fine-grained
 					examsStage = examsStageUndefined
-				} else if s.Is("h2") && text == "Observações" {
+				} else if s.Is("h2") && cs.Text() == "Observações" {
 					//!save the notes
 					examsStage = examsStageUndefined
 				} else {
 					if examsStage == examsStageCategorize {
 
-						possibleInt := text[0:2]
+						possibleInt := cs.Text()[0:2]
 						_, err := strconv.ParseUint(possibleInt, 10, 32)
 
 						if err == nil {
 							examsStage = examsStageAllMandatory
 							//! better error handling?
-							split := strings.SplitN(text, " ", 2)
+							split := strings.SplitN(cs.Text(), " ", 2)
 							courseName := strings.TrimSpace(split[1])
 							course.MandatoryExams = append(course.MandatoryExams, Exam{possibleInt, courseName})
 						} else {
-							switch text {
+							switch cs.Text() {
 							case "Uma das seguintes provas:": //? maybe enum
 								examsStage = examsStageSingleChoice
 
@@ -159,26 +212,26 @@ func main() {
 							}
 						}
 					} else {
-						if text == (nbsp + nbsp + nbsp + nbsp + nbsp + nbsp + "e") { //TODO: THIS CAN'T BE A CONTAINS. THIS HAS TO BE A "==" COMPARISON
+						if cs.Text() == (nbsp + nbsp + nbsp + nbsp + nbsp + nbsp + "e") { //TODO: THIS CAN'T BE A CONTAINS. THIS HAS TO BE A "==" COMPARISON
 							examsStage = examsStageCategorize
 						} else {
 							switch examsStage {
 							case examsStageAllMandatory:
-								split := strings.SplitN(text, " ", 2)
+								split := strings.SplitN(cs.Text(), " ", 2)
 								courseName := strings.TrimSpace(split[1])
 								possibleInt := strings.TrimSpace(split[0])
 								course.MandatoryExams = append(course.MandatoryExams, Exam{possibleInt, courseName})
 							case examsStageSingleChoice:
-								split := strings.SplitN(text, " ", 2)
+								split := strings.SplitN(cs.Text(), " ", 2)
 								courseName := strings.TrimSpace(split[1])
 								possibleInt := strings.TrimSpace(split[0])
 								course.OptionalExams[len(course.OptionalExams)-1] = append(course.OptionalExams[len(course.OptionalExams)-1], []Exam{})
 								course.OptionalExams[len(course.OptionalExams)-1][len(course.OptionalExams[len(course.OptionalExams)-1])-1] = append(course.OptionalExams[len(course.OptionalExams)-1][len(course.OptionalExams[len(course.OptionalExams)-1])-1], Exam{possibleInt, courseName})
 							case examsStageGroupChoice:
-								if text == (nbsp + nbsp + nbsp + nbsp + nbsp + nbsp + "ou") {
+								if cs.Text() == (nbsp + nbsp + nbsp + nbsp + nbsp + nbsp + "ou") {
 									course.OptionalExams[len(course.OptionalExams)-1] = append(course.OptionalExams[len(course.OptionalExams)-1], []Exam{})
 								} else {
-									split := strings.SplitN(text, " ", 2)
+									split := strings.SplitN(cs.Text(), " ", 2)
 									courseName := strings.TrimSpace(split[1])
 									possibleInt := strings.TrimSpace(split[0])
 									course.OptionalExams[len(course.OptionalExams)-1][len(course.OptionalExams[len(course.OptionalExams)-1])-1] = append(course.OptionalExams[len(course.OptionalExams)-1][len(course.OptionalExams[len(course.OptionalExams)-1])-1], Exam{possibleInt, courseName})
@@ -187,29 +240,12 @@ func main() {
 						}
 					}
 				}
-			} else if s.Is("h2") && (text == "Provas de Ingresso") {
+			} else if s.Is("h2") && (cs.Text() == "Provas de Ingresso") {
 				examsStage = examsStageCategorize
-			} else if degree, err := parseDegree(text); err == nil {
-				course.Degree = degree
-			} else if ECTS, err := parseECTS(text); err == nil {
-				course.ECTS = ECTS
-			} else if name, code, err := parseCNAEF(text); err == nil {
-				course.CNAEF.Name = name
-				course.CNAEF.Code = code
-			} else if ammount, unit, err := parseDuration(text); err == nil {
-				course.Duration.Unit = unit
-				course.Duration.Ammount = ammount
-			} else if institutionCode, courseCode, err := parseCodePair(text); err == nil {
-				course.Institution.Code = institutionCode
-				course.Course.Code = courseCode
-			} else if educationType, err := parseEducationType(text); err == nil {
-				course.Institution.EducationType = educationType
-			} else if contest, err := parseContest(text); err == nil {
-				course.Contest = contest
 			}
 		})
 		if init {
-			m = append(m, course)
+			entry = append(entry, course)
 		}
 	})
 
@@ -221,7 +257,7 @@ func main() {
 		R := unicode.ToUpper(r)
 		c.Visit("https://dges.gov.pt/guias/indcurso.asp?letra=" + string(R))
 	}
-	fmt.Println(len(m))
+	fmt.Println(len(entry))
 
 	{
 
@@ -233,7 +269,7 @@ func main() {
 
 		defer f.Close()
 
-		empJSON, err := json.Marshal(m)
+		empJSON, err := json.Marshal(entry)
 		if err != nil {
 			log.Fatalf(err.Error())
 		}
@@ -342,3 +378,11 @@ func parseECTS(text string) (uint, error) {
 		}
 	}
 }
+
+func OnCharacteristics(c *colly.Collector, match string, cb TestCallback) {
+	c.OnHTML(fmt.Sprintf("#caixa-orange > div.inside2 > :contains(\"%s\")", match), func(e *colly.HTMLElement) {
+		cb(e.Text[len(match):])
+	})
+}
+
+type TestCallback func(string)
