@@ -1,12 +1,7 @@
 use anyhow::Result;
 use futures::StreamExt;
-use reqwest::header::HeaderValue;
-use reqwest::{Request, Url};
-use reqwest_middleware::{ClientBuilder, Middleware, Next};
+use reqwest_middleware::ClientBuilder;
 use std::result::Result::Ok;
-use std::time::Duration;
-use task_local_extensions::Extensions;
-use tokio::time::timeout;
 use voyager::scraper::{ElementRef, Selector};
 use voyager::{Collector, Crawler, CrawlerConfig, RequestDelay, Response, Scraper};
 
@@ -16,7 +11,9 @@ use charset_middleware::HtmlCharsetWindows1252;
 struct MyScraper {
     letter_link_selector: Selector,
     course_link_selector: Selector,
-    characteristics_selector: Selector,
+    main_headers_selector: Selector,
+    course_name_selector: Selector,
+    institution_name_selector: Selector,
 }
 #[derive(Debug)]
 struct InstitutionCode(String);
@@ -34,10 +31,9 @@ impl Default for MyScraper {
                 "a[href*=\"detcursopi.asp\"][href*=\"?\"][href*=\"codc=\"][href*=\"code=\"]",
             )
             .unwrap(),
-            characteristics_selector: Selector::parse(
-                "#caixa-orange > div.inside2 > h2:not([class])",
-            )
-            .unwrap(),
+            main_headers_selector: Selector::parse("#caixa-orange > div.inside2 > h2").unwrap(),
+            course_name_selector: Selector::parse("#caixa-orange > div.cab1").unwrap(),
+            institution_name_selector: Selector::parse("#caixa-orange > div.cab2").unwrap(),
         }
     }
 }
@@ -79,12 +75,13 @@ impl Scraper for MyScraper {
                         }
                         url.set_query(href.last());
 
+                        //if true {
                         if url.query() == Some("letra=Z") {
-                            //if true {
                             crawler.visit_with_state(url.clone(), MyScraperState::IteratingCourses);
                         }
                     }
                 }
+
                 MyScraperState::IteratingCourses => {
                     let courses = html.select(&self.course_link_selector);
                     for node in courses {
@@ -100,26 +97,45 @@ impl Scraper for MyScraper {
                         crawler.visit_with_state(url.clone(), MyScraperState::ScrapingCourse);
                     }
                 }
+
+                // "Características do par Instituição/Curso"
                 MyScraperState::ScrapingCourse => {
-                    let courses = html.select(&self.characteristics_selector);
-                    for node in courses {
-                        let text = node
-                            .first_child()
-                            .unwrap()
-                            .value()
-                            .as_text()
-                            .unwrap()
-                            .to_string();
-                        if text == "Características do par Instituição/Curso" {
-                            let next_node = node.next_sibling().unwrap();
-                            let val = next_node.value().as_text().unwrap().to_string();
-                            dbg!(val);
-                            let next_node = next_node.next_sibling().unwrap().next_sibling().unwrap();
-                            let val = next_node.value().as_text().unwrap().to_string();
-                            dbg!(val);
-                            let next_node = next_node.next_sibling().unwrap().next_sibling().unwrap();
-                            let val = next_node.value().as_text().unwrap().to_string();
-                            dbg!(val);
+                    let course_name = html
+                        .select(&self.course_name_selector)
+                        .next()
+                        .unwrap()
+                        .inner_html();
+                    let institution_name = html
+                        .select(&self.institution_name_selector)
+                        .next()
+                        .unwrap()
+                        .inner_html();
+                    dbg!(course_name);
+                    dbg!(institution_name);
+                    for header in html.select(&self.main_headers_selector) {
+                        match header.inner_html().as_str() {
+                            "Endereço e Contactos da Instituição" => {
+                                institution_contacts_section(header);
+                            }
+                            "Características do par Instituição/Curso" => {
+                                characteristics_section(header);
+                            }
+                            "Provas de Ingresso" => {
+                                exams_section(header);
+                            }
+                            "Dados Estatísticos de Candidaturas Anteriores" => {
+                                statistics_section(header);
+                            }
+                            "Outras Informações" => {
+                                information_section(header);
+                            }
+                            // useless but known headers
+                            "Guia das Provas de Ingresso de 2022 - Detalhe de Curso<br>&nbsp;" => {}
+
+                            // unknown headers
+                            _ => {
+                                println!("UNKNOWN HEADER: {}", header.html())
+                            }
                         }
                     }
                 }
@@ -128,6 +144,31 @@ impl Scraper for MyScraper {
         }
         Ok(None)
     }
+}
+
+fn institution_contacts_section(element: ElementRef) {
+    dbg!(element.html());
+}
+
+fn characteristics_section(element: ElementRef) {
+    let mut it = element.next_siblings();
+    while let Some(sibling) = it.next() {
+        if let Some(text) = sibling.value().as_text() {
+            dbg!(text);
+        }
+        it.next();
+    }
+}
+
+fn exams_section(element: ElementRef) {
+    dbg!(element.html());
+}
+
+fn statistics_section(element: ElementRef) {
+    dbg!(element.html());
+}
+fn information_section(element: ElementRef) {
+    dbg!(element.html());
 }
 
 #[tokio::main]
@@ -152,7 +193,7 @@ async fn main() -> Result<()> {
     );
 
     while let Some(output) = collector.next().await {
-        if let Ok(course) = output {
+        if let Ok(_course) = output {
             //println!("Visited {} at depth: {}", url, depth);
         }
     }
