@@ -1,301 +1,64 @@
+pub mod lib;
+use std::{
+    ffi::OsStr,
+    fs::File,
+    path::{Path, PathBuf},
+};
+
+use std::error::Error;
+use std::io;
+use std::process;
+
+use serde::Deserialize;
+
 use anyhow::Result;
-use ego_tree::NodeRef;
-use exams::{exams_section, Exams};
-use futures::StreamExt;
-use reqwest_middleware::ClientBuilder;
-use std::fmt::Debug;
-use std::result::Result::Ok;
-use tracing::{debug, info, trace, Level};
-use voyager::scraper::{ElementRef, Node, Selector};
-use voyager::{Collector, Crawler, CrawlerConfig, RequestDelay, Response, Scraper};
+use clap::Parser;
+use lib::{all_courses, select_courses};
 
-use utils::charset_middleware::HtmlCharsetWindows1252;
-
-mod characteristics;
-use characteristics::{characteristics_section, Characteristics};
-
-mod utils;
-
-mod exams;
-
-use reqwest::Url;
-
-struct MyScraper {
-    letter_link_selector: Selector,
-    course_link_selector: Selector,
-    main_headers_selector: Selector,
-    course_name_selector: Selector,
-    institution_name_selector: Selector,
+#[derive(Debug, Deserialize)]
+struct Record {
+    institution_code: String,
+    course_code: String,
 }
 
-impl Default for MyScraper {
-    fn default() -> Self {
-        Self {
-            letter_link_selector: Selector::parse(
-                "a[href*=\"indcurso.asp\"][href*=\"?\"][href*=\"letra=\"]",
-            )
-            .unwrap(),
-            course_link_selector: Selector::parse(
-                "a[href*=\"detcursopi.asp\"][href*=\"?\"][href*=\"codc=\"][href*=\"code=\"]",
-            )
-            .unwrap(),
-            main_headers_selector: Selector::parse("#caixa-orange > div.inside2 > h2").unwrap(),
-            course_name_selector: Selector::parse("#caixa-orange > div.cab1").unwrap(),
-            institution_name_selector: Selector::parse("#caixa-orange > div.cab2").unwrap(),
-        }
+#[derive(Parser)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// Sets a custom source file
+    #[clap(short, long, value_name = "FILE", validator = file_exists)]
+    source: Option<PathBuf>,
+}
+
+fn file_exists(value: &str) -> Result<(), String> {
+    let path = Path::new(value);
+    let file_exists = path.exists();
+    let extension = path.extension().and_then(OsStr::to_str);
+    if !file_exists {
+        return Err(format!("source file doesn't exist"));
+    };
+    if extension != Some("csv") {
+        return Err(format!("source file isn't a csv"));
     }
+    Ok(())
 }
-
-/// The state model
-#[derive(Debug)]
-enum MyScraperState {
-    FindingLetters,
-    IteratingCourses,
-    ScrapingCourse,
-}
-
-#[derive(Debug)]
-struct Entry {
-    characteristics: Characteristics,
-    exams: Exams,
-    url: CourseUrl,
-}
-
-impl Entry {
-    fn new(url: CourseUrl) -> Self {
-        Entry {
-            characteristics: Characteristics::default(),
-            exams: Exams::default(),
-            url,
-        }
-    }
-}
-
-/* maybe different file */
-pub(crate) struct CourseUrl(Url);
-
-impl From<Url> for CourseUrl {
-    fn from(value: Url) -> Self {
-        CourseUrl(value)
-    }
-}
-
-impl Debug for CourseUrl {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("CourseUrl")
-            .field(&self.0.to_string())
-            .finish()
-    }
-}
-/* end file */
-
-impl Scraper for MyScraper {
-    type Output = Entry;
-
-    type State = MyScraperState;
-
-    fn scrape(
-        &mut self,
-        mut response: Response<Self::State>,
-        crawler: &mut Crawler<Self>,
-    ) -> Result<Option<Self::Output>> {
-        let html = response.html();
-        match response.state {
-            Some(state) => match state {
-                MyScraperState::FindingLetters => {
-                    let letters = html.select(&self.letter_link_selector);
-                    for node in letters {
-                        let url = &mut response.response_url;
-
-                        let mut href = node.value().attr("href").unwrap().splitn(2, "?");
-                        {
-                            let mut path_segments = url.path_segments_mut().unwrap();
-                            path_segments.pop();
-                            path_segments.push(href.next().unwrap());
-                        }
-                        url.set_query(href.last());
-
-                        crawler.visit_with_state(url.clone(), MyScraperState::IteratingCourses);
-                    }
-                }
-
-                MyScraperState::IteratingCourses => {
-                    let courses = html.select(&self.course_link_selector);
-                    for node in courses {
-                        let url = &mut response.response_url;
-
-                        let mut href = node.value().attr("href").unwrap().splitn(2, "?");
-                        {
-                            let mut path_segments = url.path_segments_mut().unwrap();
-                            path_segments.pop();
-                            path_segments.push(href.next().unwrap());
-                        }
-                        url.set_query(href.last());
-                        crawler.visit_with_state(url.clone(), MyScraperState::ScrapingCourse);
-                    }
-                }
-                MyScraperState::ScrapingCourse => {
-                    let mut entry = Entry::new(response.request_url.into());
-
-                    for header in html.select(&self.main_headers_selector) {
-                        match header.inner_html().as_str() {
-                            "Endereço e Contactos da Instituição" => {
-                                institution_contacts_section(header);
-                            }
-                            "Características do par Instituição/Curso" => {
-                                let mut iter = header.next_siblings();
-                                entry.characteristics = characteristics_section(&mut iter);
-                            }
-                            "Provas de Ingresso" => {
-                                let mut iter = header.next_siblings();
-                                entry.exams = exams_section(&mut iter);
-                            }
-                            "Dados Estatísticos de Candidaturas Anteriores" => {
-                                statistics_section(header);
-                            }
-                            "Outras Informações" => {
-                                information_section(header);
-                            }
-                            // useless but known headers
-                            "Guia das Provas de Ingresso de 2022 - Detalhe de Curso<br>&nbsp;"
-                            | "some more headers"
-                            | "some more headerss"
-                            | "some more headersss" => {}
-
-                            // unknown headers
-                            text => {
-                                //TODO: This should store unkown headers somewhere
-                                info!("UNKNOWN HEADER: {}", text);
-                            }
-                        }
-                    }
-
-                    entry.characteristics.course.name =
-                        match html.select(&self.course_name_selector).next() {
-                            Some(element_ref) => match element_ref.first_child() {
-                                Some(node_ref) => match node_ref.value().as_text() {
-                                    Some(text) => Some((text as &str).into()),
-                                    None => None,
-                                },
-                                None => None,
-                            },
-                            None => None,
-                        };
-
-                    entry.characteristics.institution.name =
-                        match html.select(&self.institution_name_selector).next() {
-                            Some(element_ref) => match element_ref.first_child() {
-                                Some(node_ref) => match node_ref.value().as_text() {
-                                    Some(text) => Some((text as &str).into()),
-                                    None => None,
-                                },
-                                None => None,
-                            },
-                            None => None,
-                        };
-
-                    return Ok(Some(entry));
-                }
-            },
-            None => {}
-        }
-        Ok(None)
-    }
-}
-
-fn institution_contacts_section(element: ElementRef) {}
-
-fn statistics_section(element: ElementRef) {}
-fn information_section(element: ElementRef) {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    //all_courses().await
-    select_courses(
-        vec![
-            ("9003".into(), "3021".into()),
-            ("9252".into(), "0300".into()),
-            ("8408".into(), "0400".into()),
-            ("9005".into(), "3091".into()),
-        ]
-        .into_iter(),
-    )
-    .await
+    let args = Args::parse();
+
+    return if let Some(source) = args.source {
+        select_courses(read_courses(source).unwrap().into_iter()).await
+    } else {
+        all_courses().await
+    };
 }
 
-async fn all_courses() -> Result<()> {
-    tracing_subscriber::fmt::init();
-
-    let config = CrawlerConfig::default()
-        .respect_robots_txt()
-        .allow_domain_with_delay(
-            "dges.gov.pt",
-            RequestDelay::Fixed(std::time::Duration::from_secs(10)),
-        )
-        //.scrape_non_success_response()
-        .set_client(
-            ClientBuilder::new(reqwest::ClientBuilder::new().build().unwrap())
-                .with(HtmlCharsetWindows1252)
-                .build(),
-        );
-
-    let mut collector = Collector::new(MyScraper::default(), config);
-    collector.crawler_mut().visit_with_state(
-        "https://dges.gov.pt/guias/indcurso.asp",
-        MyScraperState::FindingLetters,
-    );
-
-    while let Some(output) = collector.next().await {
-        if let Ok(course) = output {
-            dbg!(course);
-        }
+fn read_courses(buf: PathBuf) -> Result<Vec<Record>, Box<dyn Error>> {
+    let f = File::open(buf)?;
+    let mut rdr = csv::Reader::from_reader(f);
+    let mut res = Vec::new();
+    for result in rdr.deserialize() {
+        res.push(result?);
     }
-
-    Ok(())
-}
-
-async fn select_courses(
-    courses: impl Iterator<
-        Item = (
-            characteristics::institution::Code,
-            characteristics::course::Code,
-        ),
-    >,
-) -> Result<()> {
-    tracing_subscriber::fmt::init();
-
-    let config = CrawlerConfig::default()
-        .respect_robots_txt()
-        .allow_domain_with_delay(
-            "dges.gov.pt",
-            RequestDelay::Fixed(std::time::Duration::from_secs(10)),
-        )
-        //.scrape_non_success_response()
-        .set_client(
-            ClientBuilder::new(reqwest::ClientBuilder::new().build().unwrap())
-                .with(HtmlCharsetWindows1252)
-                .build(),
-        );
-
-    let mut collector = Collector::new(MyScraper::default(), config);
-
-    for (course_code, institution_code) in courses {
-        let course_code: String = course_code.into();
-        let institution_code: String = institution_code.into();
-        collector.crawler_mut().visit_with_state(
-            format!(
-                "https://dges.gov.pt/guias/detcursopi.asp?codc={}&code={}",
-                course_code, institution_code
-            ),
-            MyScraperState::ScrapingCourse,
-        );
-    }
-
-    while let Some(output) = collector.next().await {
-        if let Ok(course) = output {
-            dbg!(course);
-        }
-    }
-
-    Ok(())
+    Ok(res)
 }

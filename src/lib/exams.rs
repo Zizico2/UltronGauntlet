@@ -1,9 +1,8 @@
 use const_format::formatcp;
 use ego_tree::NodeRef;
-use tracing::info;
 use voyager::scraper::Node;
 
-use crate::utils::non_empty_vector::NonEmptyVector;
+use super::utils::non_empty_vector::NonEmptyVector;
 
 #[derive(Copy, Clone, Debug)]
 enum Stage {
