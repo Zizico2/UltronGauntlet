@@ -215,7 +215,7 @@ func main() {
 		log.Println("Visiting", r.URL)
 	})
 
-	for r := 'a'; r <= 'z'; r++ {
+	for r := 'z'; r <= 'z'; r++ {
 		R := unicode.ToUpper(r)
 		c.Visit("https://dges.gov.pt/guias/indcurso.asp?letra=" + string(R))
 	}

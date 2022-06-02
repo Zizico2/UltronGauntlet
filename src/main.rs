@@ -1,12 +1,24 @@
 use anyhow::Result;
+use ego_tree::NodeRef;
+use exams::{exams_section, Exams};
 use futures::StreamExt;
 use reqwest_middleware::ClientBuilder;
+use std::fmt::Debug;
 use std::result::Result::Ok;
-use voyager::scraper::{ElementRef, Selector};
+use tracing::{debug, info, trace, Level};
+use voyager::scraper::{ElementRef, Node, Selector};
 use voyager::{Collector, Crawler, CrawlerConfig, RequestDelay, Response, Scraper};
 
-mod charset_middleware;
-use charset_middleware::HtmlCharsetWindows1252;
+use utils::charset_middleware::HtmlCharsetWindows1252;
+
+mod characteristics;
+use characteristics::{characteristics_section, Characteristics};
+
+mod utils;
+
+mod exams;
+
+use reqwest::Url;
 
 struct MyScraper {
     letter_link_selector: Selector,
@@ -15,10 +27,6 @@ struct MyScraper {
     course_name_selector: Selector,
     institution_name_selector: Selector,
 }
-#[derive(Debug)]
-struct InstitutionCode(String);
-#[derive(Debug)]
-struct CourseCode(String);
 
 impl Default for MyScraper {
     fn default() -> Self {
@@ -47,10 +55,42 @@ enum MyScraperState {
 }
 
 #[derive(Debug)]
-struct CourseI {}
+struct Entry {
+    characteristics: Characteristics,
+    exams: Exams,
+    url: CourseUrl,
+}
+
+impl Entry {
+    fn new(url: CourseUrl) -> Self {
+        Entry {
+            characteristics: Characteristics::default(),
+            exams: Exams::default(),
+            url,
+        }
+    }
+}
+
+/* maybe different file */
+pub(crate) struct CourseUrl(Url);
+
+impl From<Url> for CourseUrl {
+    fn from(value: Url) -> Self {
+        CourseUrl(value)
+    }
+}
+
+impl Debug for CourseUrl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CourseUrl")
+            .field(&self.0.to_string())
+            .finish()
+    }
+}
+/* end file */
 
 impl Scraper for MyScraper {
-    type Output = CourseI;
+    type Output = Entry;
 
     type State = MyScraperState;
 
@@ -75,10 +115,7 @@ impl Scraper for MyScraper {
                         }
                         url.set_query(href.last());
 
-                        //if true {
-                        if url.query() == Some("letra=Z") {
-                            crawler.visit_with_state(url.clone(), MyScraperState::IteratingCourses);
-                        }
+                        crawler.visit_with_state(url.clone(), MyScraperState::IteratingCourses);
                     }
                 }
 
@@ -97,31 +134,21 @@ impl Scraper for MyScraper {
                         crawler.visit_with_state(url.clone(), MyScraperState::ScrapingCourse);
                     }
                 }
-
-                // "Características do par Instituição/Curso"
                 MyScraperState::ScrapingCourse => {
-                    let course_name = html
-                        .select(&self.course_name_selector)
-                        .next()
-                        .unwrap()
-                        .inner_html();
-                    let institution_name = html
-                        .select(&self.institution_name_selector)
-                        .next()
-                        .unwrap()
-                        .inner_html();
-                    dbg!(course_name);
-                    dbg!(institution_name);
+                    let mut entry = Entry::new(response.request_url.into());
+
                     for header in html.select(&self.main_headers_selector) {
                         match header.inner_html().as_str() {
                             "Endereço e Contactos da Instituição" => {
                                 institution_contacts_section(header);
                             }
                             "Características do par Instituição/Curso" => {
-                                characteristics_section(header);
+                                let mut iter = header.next_siblings();
+                                entry.characteristics = characteristics_section(&mut iter);
                             }
                             "Provas de Ingresso" => {
-                                exams_section(header);
+                                let mut iter = header.next_siblings();
+                                entry.exams = exams_section(&mut iter);
                             }
                             "Dados Estatísticos de Candidaturas Anteriores" => {
                                 statistics_section(header);
@@ -130,14 +157,44 @@ impl Scraper for MyScraper {
                                 information_section(header);
                             }
                             // useless but known headers
-                            "Guia das Provas de Ingresso de 2022 - Detalhe de Curso<br>&nbsp;" => {}
+                            "Guia das Provas de Ingresso de 2022 - Detalhe de Curso<br>&nbsp;"
+                            | "some more headers"
+                            | "some more headerss"
+                            | "some more headersss" => {}
 
                             // unknown headers
-                            _ => {
-                                println!("UNKNOWN HEADER: {}", header.html())
+                            text => {
+                                //TODO: This should store unkown headers somewhere
+                                info!("UNKNOWN HEADER: {}", text);
                             }
                         }
                     }
+
+                    entry.characteristics.course.name =
+                        match html.select(&self.course_name_selector).next() {
+                            Some(element_ref) => match element_ref.first_child() {
+                                Some(node_ref) => match node_ref.value().as_text() {
+                                    Some(text) => Some((text as &str).into()),
+                                    None => None,
+                                },
+                                None => None,
+                            },
+                            None => None,
+                        };
+
+                    entry.characteristics.institution.name =
+                        match html.select(&self.institution_name_selector).next() {
+                            Some(element_ref) => match element_ref.first_child() {
+                                Some(node_ref) => match node_ref.value().as_text() {
+                                    Some(text) => Some((text as &str).into()),
+                                    None => None,
+                                },
+                                None => None,
+                            },
+                            None => None,
+                        };
+
+                    return Ok(Some(entry));
                 }
             },
             None => {}
@@ -146,33 +203,29 @@ impl Scraper for MyScraper {
     }
 }
 
-fn institution_contacts_section(element: ElementRef) {
-    dbg!(element.html());
-}
+fn institution_contacts_section(element: ElementRef) {}
 
-fn characteristics_section(element: ElementRef) {
-    let mut it = element.next_siblings();
-    while let Some(sibling) = it.next() {
-        if let Some(text) = sibling.value().as_text() {
-            dbg!(text);
-        }
-        it.next();
-    }
-}
-
-fn exams_section(element: ElementRef) {
-    dbg!(element.html());
-}
-
-fn statistics_section(element: ElementRef) {
-    dbg!(element.html());
-}
-fn information_section(element: ElementRef) {
-    dbg!(element.html());
-}
+fn statistics_section(element: ElementRef) {}
+fn information_section(element: ElementRef) {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    //all_courses().await
+    select_courses(
+        vec![
+            ("9003".into(), "3021".into()),
+            ("9252".into(), "0300".into()),
+            ("8408".into(), "0400".into()),
+            ("9005".into(), "3091".into()),
+        ]
+        .into_iter(),
+    )
+    .await
+}
+
+async fn all_courses() -> Result<()> {
+    tracing_subscriber::fmt::init();
+
     let config = CrawlerConfig::default()
         .respect_robots_txt()
         .allow_domain_with_delay(
@@ -193,8 +246,54 @@ async fn main() -> Result<()> {
     );
 
     while let Some(output) = collector.next().await {
-        if let Ok(_course) = output {
-            //println!("Visited {} at depth: {}", url, depth);
+        if let Ok(course) = output {
+            dbg!(course);
+        }
+    }
+
+    Ok(())
+}
+
+async fn select_courses(
+    courses: impl Iterator<
+        Item = (
+            characteristics::institution::Code,
+            characteristics::course::Code,
+        ),
+    >,
+) -> Result<()> {
+    tracing_subscriber::fmt::init();
+
+    let config = CrawlerConfig::default()
+        .respect_robots_txt()
+        .allow_domain_with_delay(
+            "dges.gov.pt",
+            RequestDelay::Fixed(std::time::Duration::from_secs(10)),
+        )
+        //.scrape_non_success_response()
+        .set_client(
+            ClientBuilder::new(reqwest::ClientBuilder::new().build().unwrap())
+                .with(HtmlCharsetWindows1252)
+                .build(),
+        );
+
+    let mut collector = Collector::new(MyScraper::default(), config);
+
+    for (course_code, institution_code) in courses {
+        let course_code: String = course_code.into();
+        let institution_code: String = institution_code.into();
+        collector.crawler_mut().visit_with_state(
+            format!(
+                "https://dges.gov.pt/guias/detcursopi.asp?codc={}&code={}",
+                course_code, institution_code
+            ),
+            MyScraperState::ScrapingCourse,
+        );
+    }
+
+    while let Some(output) = collector.next().await {
+        if let Ok(course) = output {
+            dbg!(course);
         }
     }
 
