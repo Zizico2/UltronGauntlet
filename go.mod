@@ -1,4 +1,4 @@
-module ug.com/new_craweler
+module ug.com/main
 
 go 1.18
 
@@ -16,7 +16,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.3.1 // indirect
 	github.com/kennygrant/sanitize v1.2.4 // indirect
-	github.com/lib/pq v1.10.6 // indirect
 	github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca // indirect
 	github.com/temoto/robotstxt v1.1.2 // indirect
 	golang.org/x/net v0.0.0-20210916014120-12bc252f5db8 // indirect
