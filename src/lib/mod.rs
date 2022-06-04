@@ -15,7 +15,7 @@ use characteristics::{characteristics_section, Characteristics};
 
 pub mod utils;
 
-mod exams;
+pub mod exams;
 
 use reqwest::Url;
 

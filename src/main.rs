@@ -6,8 +6,6 @@ use std::{
 };
 
 use std::error::Error;
-use std::io;
-use std::process;
 
 use serde::Deserialize;
 
@@ -25,11 +23,11 @@ struct Record {
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// Sets a custom source file
-    #[clap(short, long, value_name = "FILE", validator = file_exists)]
+    #[clap(short, long, value_name = "FILE", validator = csv_file_exists)]
     source: Option<PathBuf>,
 }
 
-fn file_exists(value: &str) -> Result<(), String> {
+fn csv_file_exists(value: &str) -> Result<(), String> {
     let path = Path::new(value);
     let file_exists = path.exists();
     let extension = path.extension().and_then(OsStr::to_str);
@@ -37,6 +35,8 @@ fn file_exists(value: &str) -> Result<(), String> {
         return Err(format!("source file doesn't exist"));
     };
     if extension != Some("csv") {
+        //TODO: actually check if the file is csv compliant. behind a flag, maybe cuz performance
+        //TODO: maybe even allow a schema to be provided
         return Err(format!("source file isn't a csv"));
     }
     Ok(())
