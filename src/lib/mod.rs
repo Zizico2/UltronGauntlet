@@ -21,6 +21,8 @@ use reqwest::Url;
 
 use crate::Record;
 
+pub mod db;
+
 struct MyScraper {
     letter_link_selector: Selector,
     course_link_selector: Selector,
