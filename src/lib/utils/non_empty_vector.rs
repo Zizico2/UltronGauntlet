@@ -1,10 +1,10 @@
 //! MAKE THIS A STANDALONE CRATE
 
-use std::fmt::Display;
+use std::{fmt::Display};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Default)]
-pub struct NonEmptyVector<T>(pub Vec<T>);
+pub struct NonEmptyVector<T>(Vec<T>);
 
 impl<T> NonEmptyVector<T> {
     pub fn new(elem: T) -> Self {
@@ -32,6 +32,22 @@ impl<T> NonEmptyVector<T> {
     }
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+}
+
+impl<T> From<NonEmptyVector<T>> for Vec<T> {
+    fn from(val: NonEmptyVector<T>) -> Self {
+        val.0
+    }
+}
+
+impl<T> IntoIterator for NonEmptyVector<T> {
+    type Item = T;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 

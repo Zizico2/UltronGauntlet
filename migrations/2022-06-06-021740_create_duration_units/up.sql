@@ -2,5 +2,6 @@
 CREATE TABLE duration_units (
     rowid INTEGER NOT NULL,
     unit TEXT NOT NULL,
-    PRIMARY KEY(rowid)
+    PRIMARY KEY(rowid),
+    UNIQUE(unit)
 )

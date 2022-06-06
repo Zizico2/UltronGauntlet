@@ -4,8 +4,8 @@ use crate::lib::utils::non_empty_vector::NonEmptyVector;
 
 #[derive(Debug, Clone, Default)]
 pub struct Exam {
-    code: Option<ExamCode>,
-    name: Option<ExamName>,
+    pub code: Option<ExamCode>,
+    pub name: Option<ExamName>,
 }
 
 // newtype
@@ -14,6 +14,12 @@ pub struct ExamCode(String);
 impl From<&str> for ExamCode {
     fn from(exam: &str) -> Self {
         ExamCode(exam.into())
+    }
+}
+
+impl From<ExamCode> for String {
+    fn from(val: ExamCode) -> Self {
+        val.0
     }
 }
 
@@ -26,9 +32,25 @@ impl From<&str> for ExamName {
     }
 }
 
+impl From<ExamName> for String {
+    fn from(val: ExamName) -> Self {
+        val.0
+    }
+}
+
 // newtype
 #[derive(Debug, Clone, Default)]
 pub struct ExamGroup(Vec<Exam>);
+
+impl IntoIterator for ExamGroup {
+    type Item = Exam;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
 
 impl<'a> From<&'a mut ExamGroup> for &'a mut Vec<Exam> {
     fn from(val: &'a mut ExamGroup) -> Self {
@@ -50,7 +72,7 @@ impl From<Vec<Exam>> for ExamGroup {
 
 impl From<NonEmptyVector<Exam>> for ExamGroup {
     fn from(val: NonEmptyVector<Exam>) -> Self {
-        ExamGroup(val.0)
+        ExamGroup(val.into())
     }
 }
 
@@ -74,6 +96,13 @@ impl From<OptionalExams> for NonEmptyVector<NonEmptyVector<ExamGroup>> {
     }
 }
 
+impl From<OptionalExams> for Vec<NonEmptyVector<ExamGroup>> {
+    fn from(val: OptionalExams) -> Self {
+        let val: NonEmptyVector<NonEmptyVector<ExamGroup>> = val.into();
+        val.into()
+    }
+}
+
 #[derive(Debug)]
 pub struct MandatoryExams(NonEmptyVector<Exam>);
 
@@ -86,6 +115,13 @@ impl From<NonEmptyVector<Exam>> for MandatoryExams {
 impl From<MandatoryExams> for NonEmptyVector<Exam> {
     fn from(val: MandatoryExams) -> Self {
         val.0
+    }
+}
+
+impl From<MandatoryExams> for Vec<Exam> {
+    fn from(val: MandatoryExams) -> Self {
+        let val: NonEmptyVector<Exam> = val.into();
+        val.into()
     }
 }
 

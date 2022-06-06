@@ -13,6 +13,12 @@ impl From<&str> for Unit {
     }
 }
 
+impl From<Unit> for String {
+    fn from(value: Unit) -> Self {
+        value.0
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Ammount(u8);
 

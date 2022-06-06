@@ -1,0 +1,11 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "name": "ultron_gauntlet",
+            "database": "${workspaceFolder:UltronGauntlet}/main.db"
+        }
+    ],
+    "sqltools.useNodeRuntime": true
+}

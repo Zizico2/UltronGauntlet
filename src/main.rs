@@ -1,7 +1,8 @@
 #[macro_use]
 extern crate diesel;
-extern crate dotenv;
 
+#[macro_use]
+extern crate diesel_migrations;
 
 pub mod lib;
 use std::{
