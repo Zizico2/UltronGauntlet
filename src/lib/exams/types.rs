@@ -84,6 +84,16 @@ pub struct Exams {
 #[derive(Debug)]
 pub struct OptionalExams(NonEmptyVector<NonEmptyVector<ExamGroup>>);
 
+impl IntoIterator for OptionalExams {
+    type Item = NonEmptyVector<ExamGroup>;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl From<NonEmptyVector<NonEmptyVector<ExamGroup>>> for OptionalExams {
     fn from(val: NonEmptyVector<NonEmptyVector<ExamGroup>>) -> Self {
         OptionalExams(val)
@@ -105,6 +115,16 @@ impl From<OptionalExams> for Vec<NonEmptyVector<ExamGroup>> {
 
 #[derive(Debug)]
 pub struct MandatoryExams(NonEmptyVector<Exam>);
+
+impl IntoIterator for MandatoryExams {
+    type Item = Exam;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
 
 impl From<NonEmptyVector<Exam>> for MandatoryExams {
     fn from(val: NonEmptyVector<Exam>) -> Self {

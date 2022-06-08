@@ -6,3 +6,9 @@ impl From<u16> for Ects {
         Ects(value)
     }
 }
+
+impl From<Ects> for u16 {
+    fn from(val: Ects) -> Self {
+        val.0
+    }
+}

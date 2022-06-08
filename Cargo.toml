@@ -25,6 +25,11 @@ clap = { version = "3.1.18", features = ["derive"] }
 serde = { version = "1.0.137", features = ["derive"] }
 csv = "1.1.6"
 #diesel
-diesel = { version = "1.4.8", features = ["sqlite", "extras"] }
+diesel = { version = "2.0.0-rc.0", features = [
+    "postgres",
+    "sqlite",
+    "extras",
+    "returning_clauses_for_sqlite_3_35",
+] }
 dotenv = "0.15.0"
-diesel_migrations = "1.4.0"
+diesel_migrations = "2.0.0-rc.0"

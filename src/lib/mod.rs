@@ -3,21 +3,22 @@ use crate::Record;
 use anyhow::Result;
 use characteristics::{characteristics_section, Characteristics};
 use diesel_migrations::embed_migrations;
+use diesel_migrations::EmbeddedMigrations;
 use exams::{exams_section, Exams};
 use futures::StreamExt;
 use reqwest::Url;
 use reqwest_middleware::ClientBuilder;
 use std::fmt::Debug;
-use std::fs::File;
 use std::result::Result::Ok;
 use tracing::info;
 use utils::charset_middleware::HtmlCharsetWindows1252;
 use voyager::scraper::{ElementRef, Selector};
 use voyager::{Collector, Crawler, CrawlerConfig, RequestDelay, Response, Scraper};
 
+use self::db::create_main;
+use self::db::create_mandatory_exam;
 use self::db::{create_cnaef_area, create_exam, establish_connection};
-use self::exams::{Exam, ExamGroup};
-use self::utils::non_empty_vector::NonEmptyVector;
+use crate::diesel_migrations::MigrationHarness;
 
 mod characteristics;
 
@@ -25,7 +26,8 @@ pub mod db;
 pub mod exams;
 pub mod utils;
 
-embed_migrations!("./migrations");
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
+
 struct MyScraper {
     letter_link_selector: Selector,
     course_link_selector: Selector,
@@ -64,7 +66,6 @@ enum MyScraperState {
 struct Entry {
     characteristics: Characteristics,
     exams: Exams,
-    url: CourseUrl,
 }
 
 impl Entry {
@@ -72,7 +73,6 @@ impl Entry {
         Entry {
             characteristics: Characteristics::default(),
             exams: Exams::default(),
-            url,
         }
     }
 }
@@ -213,7 +213,7 @@ fn institution_contacts_section(element: ElementRef) {}
 fn statistics_section(element: ElementRef) {}
 fn information_section(element: ElementRef) {}
 
-pub async fn all_courses() -> Result<()> {
+pub async fn all_courses() -> MyCollector {
     tracing_subscriber::fmt::init();
 
     let config = CrawlerConfig::default()
@@ -235,16 +235,10 @@ pub async fn all_courses() -> Result<()> {
         MyScraperState::FindingLetters,
     );
 
-    while let Some(output) = collector.next().await {
-        if let Ok(course) = output {
-            dbg!(course);
-        }
-    }
-
-    Ok(())
+    MyCollector(collector)
 }
 
-pub(super) async fn select_courses(courses: impl Iterator<Item = Record>) -> Result<()> {
+pub(super) async fn select_courses(courses: impl Iterator<Item = Record>) -> MyCollector {
     tracing_subscriber::fmt::init();
 
     let config = CrawlerConfig::default()
@@ -278,56 +272,74 @@ pub(super) async fn select_courses(courses: impl Iterator<Item = Record>) -> Res
         );
     }
 
-    let conn = establish_connection();
-    embedded_migrations::run(&conn).expect("Error running migrations");
+    MyCollector(collector)
+}
+
+pub struct MyCollector(Collector<MyScraper>);
+
+pub async fn handle_results(collector: &mut MyCollector) {
+    let collector = &mut collector.0;
+    let mut conn = establish_connection();
+
+    //TODO: HANDLE THIS ERROR
+    conn.run_pending_migrations(MIGRATIONS)
+        .expect("Please migration god, be good!");
+
     while let Some(output) = collector.next().await {
         if let Ok(course) = output {
-            //dbg!(course);
-            if let Some(unit) = course.characteristics.duration.unit {
-                let unit: String = unit.into();
-                create_duration_unit(&conn, &unit);
-            }
+            if let Some(ects) = course.characteristics.ects {
+                let ects: u16 = ects.into();
+                let main = create_main(&mut conn, ects as i32);
 
-            if let Some(code) = course.characteristics.cnaef_area.code {
-                if let Some(name) = course.characteristics.cnaef_area.name {
-                    let code: String = code.into();
-                    let name: String = name.into();
-                    create_cnaef_area(&conn, &code, &name);
-                }
-            }
+                if let Ok(main) = main {
+                    //dbg!(course);
+                    if let Some(unit) = course.characteristics.duration.unit {
+                        let unit: String = unit.into();
+                        create_duration_unit(&mut conn, &unit);
+                    }
 
-            if let Some(exams) = course.exams.optional {
-                let exams: NonEmptyVector<NonEmptyVector<ExamGroup>> = exams.into();
-                for exams in exams {
-                    for exam_group in exams {
-                        for exam in exam_group {
+                    if let Some(code) = course.characteristics.cnaef_area.code {
+                        if let Some(name) = course.characteristics.cnaef_area.name {
+                            let code: String = code.into();
+                            let name: String = name.into();
+                            create_cnaef_area(&mut conn, &code, &name);
+                        }
+                    }
+
+                    if let Some(exams) = course.exams.optional {
+                        for exams in exams {
+                            for exam_group in exams {
+                                for exam in exam_group {
+                                    if let Some(code) = exam.code {
+                                        if let Some(name) = exam.name {
+                                            let code: String = code.into();
+                                            let name: String = name.into();
+
+                                            create_exam(&mut conn, &code, &name);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some(exams) = course.exams.mandatory {
+                        for exam in exams {
                             if let Some(code) = exam.code {
                                 if let Some(name) = exam.name {
                                     let code: String = code.into();
                                     let name: String = name.into();
-                                    create_exam(&conn, &code, &name);
+                                    if let Ok(exam) = create_exam(&mut conn, &code, &name) {
+                                        create_mandatory_exam(&mut conn, exam.rowid, main.rowid);
+                                    } else {
+                                        info!("{}", name);
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-
-            if let Some(exams) = course.exams.mandatory {
-                let exams: Vec<Exam> = exams.into();
-
-                for exam in exams {
-                    if let Some(code) = exam.code {
-                        if let Some(name) = exam.name {
-                            let code: String = code.into();
-                            let name: String = name.into();
-                            create_exam(&conn, &code, &name);
-                        }
-                    }
-                }
-            }
         }
     }
-
-    Ok(())
 }

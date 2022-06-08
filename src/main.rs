@@ -13,11 +13,16 @@ use std::{
 
 use std::error::Error;
 
+use futures::StreamExt;
 use serde::Deserialize;
 
 use anyhow::Result;
 use clap::Parser;
-use lib::{all_courses, select_courses};
+use lib::{
+    all_courses,
+    db::{create_main, establish_connection},
+    select_courses, handle_results,
+};
 
 #[derive(Debug, Deserialize)]
 struct Record {
@@ -52,11 +57,15 @@ fn csv_file_exists(value: &str) -> Result<(), String> {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    return if let Some(source) = args.source {
+    let mut collector = if let Some(source) = args.source {
         select_courses(read_courses(source).unwrap().into_iter()).await
     } else {
         all_courses().await
     };
+
+    handle_results(&mut collector).await;
+
+    Ok(())
 }
 
 fn read_courses(buf: PathBuf) -> Result<Vec<Record>, Box<dyn Error>> {
