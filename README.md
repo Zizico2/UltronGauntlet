@@ -7,10 +7,10 @@ Go:
 <https://github.com/uber-go/zap>
 <https://github.com/jackc/pgx>
 
-Falta:
-
-Duration table (DurationUnit, DurationAmmount)
+Missing:
 
 Optional exams ...
+
+institution information
 
 Completar Main

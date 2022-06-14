@@ -1,6 +1,5 @@
-use diesel::pg::PgConnection;
+use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use diesel::{prelude::*, query_dsl::LoadQuery};
 use dotenv::dotenv;
 use std::fmt::Display;
 use std::{env, fs};
@@ -12,21 +11,71 @@ use diesel::result::Error as DieselError;
 mod models;
 pub(crate) mod schema;
 
-use crate::lib::db::models::{Exam, NewExam, NewMain, NewMandatoryExam};
+use crate::lib::db::models::{Exam, NewDuration, NewExam, NewMain, NewMandatoryExam};
 
-use self::models::{Main, MandatoryExam, NewCnaefArea, NewDurationUnit};
+use self::models::{DurationUnit, Main, MandatoryExam, NewCnaefArea, NewDurationUnit};
 
-pub fn create_duration_unit<'a>(conn: &mut SqliteConnection, unit: &'a str) {
-    use schema::duration_units;
+pub fn create_duration(
+    conn: &mut SqliteConnection,
+    main_id: i32,
+    duration_unit_id: i32,
+    ammount: i32,
+) {
+    use schema::durations;
 
-    let new_duration_unit = NewDurationUnit { unit };
+    let new_duration = NewDuration {
+        rowid: main_id,
+        unit: duration_unit_id,
+        ammount,
+    };
 
-    let insert_result = diesel::insert_into(duration_units::table)
-        .values(&new_duration_unit)
+    let insert_result = diesel::insert_into(durations::table)
+        .values(&new_duration)
         .execute(conn);
 
     if let Err(err) = insert_result {
         info!("{}", err);
+    }
+}
+
+pub fn create_duration_unit<'a>(
+    conn: &mut SqliteConnection,
+    new_name: &'a str,
+) -> Result<DurationUnit, ()> {
+    use schema::duration_units;
+    use schema::duration_units::dsl::*;
+
+    let new_duration_unit = NewDurationUnit { name: new_name };
+
+    /*
+    let result = diesel::replace_into(duration_units::table)
+        .values(&new_duration_unit)
+        .get_result(conn);
+    */
+
+    let result = conn.transaction(|conn| {
+        let mut result = diesel::insert_into(duration_units::table)
+            .values(&new_duration_unit)
+            .get_result::<DurationUnit>(conn);
+        if let Err(ref err) = result {
+            match err {
+                DieselError::DatabaseError(err, _) => match err {
+                    diesel::result::DatabaseErrorKind::UniqueViolation => {
+                        result = duration_units
+                            .filter(name.eq(new_name))
+                            .first::<DurationUnit>(conn);
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+        result
+    });
+
+    match result {
+        Ok(result) => Ok(result),
+        Err(_) => Err(()),
     }
 }
 

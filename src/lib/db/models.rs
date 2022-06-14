@@ -1,10 +1,27 @@
-use super::schema::{cnaef_areas, duration_units, exams, main, mandatory_exams};
+use super::schema::{cnaef_areas, duration_units, durations, exams, main, mandatory_exams};
 use diesel::AsChangeset;
+
+#[derive(Insertable)]
+#[diesel(table_name = durations)]
+pub struct NewDuration {
+    pub rowid: i32,
+    pub unit: i32,
+    pub ammount: i32,
+}
+
+#[derive(Queryable)]
+pub struct Duration {
+    rowid: i32,
+    unit: i32,
+    ammount: i32,
+}
+
+//--------------------
 
 #[derive(Insertable)]
 #[diesel(table_name = duration_units)]
 pub struct NewDurationUnit<'a> {
-    pub unit: &'a str,
+    pub name: &'a str,
 }
 
 #[derive(Queryable)]

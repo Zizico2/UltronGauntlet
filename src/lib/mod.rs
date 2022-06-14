@@ -15,10 +15,11 @@ use utils::charset_middleware::HtmlCharsetWindows1252;
 use voyager::scraper::{ElementRef, Selector};
 use voyager::{Collector, Crawler, CrawlerConfig, RequestDelay, Response, Scraper};
 
+use self::db::create_duration;
 use self::db::create_main;
 use self::db::create_mandatory_exam;
 use self::db::{create_cnaef_area, create_exam, establish_connection};
-use crate::diesel_migrations::MigrationHarness;
+use diesel_migrations::MigrationHarness;
 
 mod characteristics;
 
@@ -141,7 +142,9 @@ impl Scraper for MyScraper {
                     }
                 }
                 MyScraperState::ScrapingCourse => {
-                    let mut entry = Entry::new(response.request_url.into());
+                    let mut entry = Entry::new(response.request_url.clone().into());
+                    let url: String = response.request_url.to_string();
+                    dbg!(url);
 
                     for header in html.select(&self.main_headers_selector) {
                         match header.inner_html().as_str() {
@@ -293,9 +296,20 @@ pub async fn handle_results(collector: &mut MyCollector) {
 
                 if let Ok(main) = main {
                     //dbg!(course);
-                    if let Some(unit) = course.characteristics.duration.unit {
-                        let unit: String = unit.into();
-                        create_duration_unit(&mut conn, &unit);
+                    if let Some(name) = course.characteristics.duration.unit {
+                        let name: String = name.into();
+                        let duration_unit = create_duration_unit(&mut conn, &name);
+                        if let Some(ammount) = course.characteristics.duration.ammount {
+                            if let Ok(duration_unit) = duration_unit {
+                                let ammount: u8 = ammount.into();
+                                create_duration(
+                                    &mut conn,
+                                    main.rowid,
+                                    duration_unit.rowid,
+                                    ammount as i32,
+                                );
+                            }
+                        }
                     }
 
                     if let Some(code) = course.characteristics.cnaef_area.code {

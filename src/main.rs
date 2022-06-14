@@ -1,9 +1,6 @@
 #[macro_use]
 extern crate diesel;
 
-#[macro_use]
-extern crate diesel_migrations;
-
 pub mod lib;
 use std::{
     ffi::OsStr,
@@ -13,16 +10,11 @@ use std::{
 
 use std::error::Error;
 
-use futures::StreamExt;
 use serde::Deserialize;
 
 use anyhow::Result;
 use clap::Parser;
-use lib::{
-    all_courses,
-    db::{create_main, establish_connection},
-    select_courses, handle_results,
-};
+use lib::{all_courses, handle_results, select_courses};
 
 #[derive(Debug, Deserialize)]
 struct Record {

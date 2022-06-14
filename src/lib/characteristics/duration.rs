@@ -27,3 +27,9 @@ impl From<u8> for Ammount {
         Ammount(value)
     }
 }
+
+impl From<Ammount> for u8 {
+    fn from(value: Ammount) -> Self {
+        value.0
+    }
+}

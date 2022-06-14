@@ -20,10 +20,19 @@ CREATE TABLE cnaef_areas (
 
 CREATE TABLE duration_units (
     rowid INTEGER NOT NULL,
-    unit TEXT NOT NULL,
+    name TEXT NOT NULL,
     PRIMARY KEY(rowid),
     UNIQUE(rowid),
-    UNIQUE(unit)
+    UNIQUE(name)
+);
+
+CREATE TABLE durations (
+    rowid INTEGER NOT NULL,
+    unit INTEGER NOT NULL,
+    ammount INTEGER NOT NULL,
+    PRIMARY KEY(rowid),
+    FOREIGN KEY(rowid) REFERENCES main(rowid),
+    FOREIGN KEY(unit) REFERENCES duration_units(rowid)
 );
 
 CREATE TABLE mandatory_exams (
