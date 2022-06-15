@@ -12,7 +12,9 @@ use diesel::result::Error as DieselError;
 mod models;
 pub(crate) mod schema;
 
-use crate::lib::db::models::{Exam, NewDuration, NewExam, NewMain, NewMandatoryExam};
+use crate::lib::db::models::{
+    Exam, Institution, NewDuration, NewExam, NewInstitution, NewMain, NewMandatoryExam,
+};
 
 use self::models::{DurationUnit, Main, MandatoryExam, NewCnaefArea, NewDurationUnit};
 
@@ -159,16 +161,81 @@ pub fn create_mandatory_exam(
     }
 }
 
-pub fn create_main(conn: &mut SqliteConnection, ects: i32) -> Result<Main, ()> {
+pub fn create_main(conn: &mut SqliteConnection, ects: i32, institution: i32) -> Result<Main, ()> {
     use schema::main;
 
-    let new_main = NewMain { ects };
+    let new_main = NewMain { ects, institution };
     let result = diesel::insert_into(main::table)
         .values(&new_main)
         .get_result::<Main>(conn);
     match result {
         Ok(result) => Ok(result),
         Err(_) => Err(()),
+    }
+}
+
+/*fn my_func<T: AsRef<str>>(list: &[T]) { ... }*/
+//TODO: take a look
+pub fn create_institution(
+    conn: &mut SqliteConnection,
+    code_val: &str,
+    name_val: &str,
+    address_val: impl Iterator<Item = impl AsRef<str>>,
+    phone_numbers_val: impl Iterator<Item = impl AsRef<str>>,
+    email_addresses_val: impl Iterator<Item = impl AsRef<str>>,
+) -> Result<Institution, ()> {
+    use schema::institutions;
+    use schema::institutions::dsl::*;
+
+    let mut addr: String = "".to_string();
+
+    for line in address_val {
+        addr.push_str(&format!(" {}", line.as_ref()));
+    }
+
+    let mut phone_numbers_val_1: String = "".to_string();
+
+    for number in phone_numbers_val {
+        phone_numbers_val_1.push_str(&format!(" {}", number.as_ref()));
+    }
+
+    let mut email_addresses_val_1: String = "".to_string();
+
+    for email in email_addresses_val {
+        email_addresses_val_1.push_str(&format!(" {}", email.as_ref()));
+    }
+
+    let new_institution = NewInstitution {
+        code: code_val,
+        name: name_val,
+        address: &addr,
+        phone_numbers: &phone_numbers_val_1,
+        email_addresses: &email_addresses_val_1,
+    };
+
+    let result = conn.transaction(|conn| {
+        let mut result = diesel::insert_into(institutions::table)
+            .values(&new_institution)
+            .get_result::<Institution>(conn);
+        if let Err(ref err) = result {
+            match err {
+                DieselError::DatabaseError(err, _) => match err {
+                    diesel::result::DatabaseErrorKind::UniqueViolation => {
+                        result = institutions
+                            .filter(code.eq(code_val))
+                            .first::<Institution>(conn);
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+        result
+    });
+
+    match result {
+        Ok(result) => Ok(result),
+        Err(_err) => Err(()),
     }
 }
 

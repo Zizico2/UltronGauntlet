@@ -1,4 +1,6 @@
-use super::schema::{cnaef_areas, duration_units, durations, exams, main, mandatory_exams};
+use super::schema::{
+    cnaef_areas, duration_units, durations, exams, institutions, main, mandatory_exams,
+};
 use diesel::AsChangeset;
 
 #[derive(Insertable)]
@@ -68,12 +70,14 @@ pub struct Exam {
 #[diesel(table_name = main)]
 pub struct NewMain {
     pub ects: i32,
+    pub institution: i32,
 }
 
 #[derive(Queryable)]
 pub struct Main {
     pub rowid: i32,
     pub ects: i32,
+    pub institution: i32,
 }
 
 // mandatory exams
@@ -90,4 +94,26 @@ pub struct MandatoryExam {
     pub rowid: i32,
     pub exam: i32,
     pub main: i32,
+}
+
+// institutions
+
+#[derive(Insertable)]
+#[diesel(table_name = institutions)]
+pub struct NewInstitution<'a> {
+    pub code: &'a str,
+    pub name: &'a str,
+    pub address: &'a str,
+    pub phone_numbers: &'a str,
+    pub email_addresses: &'a str,
+}
+
+#[derive(Queryable)]
+pub struct Institution {
+    pub rowid: i32,
+    pub code: String,
+    pub name: String,
+    pub address: String,
+    pub phone_numbers: String,
+    pub email_addresses: String,
 }

@@ -30,9 +30,21 @@ table! {
 }
 
 table! {
+    institutions (rowid) {
+        rowid -> Integer,
+        code -> Text,
+        name -> Text,
+        address -> Text,
+        phone_numbers -> Text,
+        email_addresses -> Text,
+    }
+}
+
+table! {
     main (rowid) {
         rowid -> Integer,
         ects -> Integer,
+        institution -> Integer,
     }
 }
 
@@ -53,6 +65,7 @@ allow_tables_to_appear_in_same_query!(
     duration_units,
     durations,
     exams,
+    institutions,
     main,
     mandatory_exams,
 );

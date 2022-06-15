@@ -30,9 +30,26 @@ CREATE TABLE durations (
     rowid INTEGER NOT NULL,
     unit INTEGER NOT NULL,
     ammount INTEGER NOT NULL,
+    UNIQUE(rowid),
     PRIMARY KEY(rowid),
     FOREIGN KEY(rowid) REFERENCES main(rowid) DEFERRABLE INITIALLY DEFERRED,
     FOREIGN KEY(unit) REFERENCES duration_units(rowid) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE institutions (
+    rowid INTEGER NOT NULL,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    /* should be an array of lines - abstract as table */
+    address TEXT NOT NULL,
+    /* should be an array of numbers - abstract as table */
+    phone_numbers TEXT NOT NULL,
+    /* should be an array of email addresses - abstract as table */
+    email_addresses TEXT NOT NULL,
+    UNIQUE(rowid),
+    PRIMARY KEY(rowid),
+    UNIQUE(code),
+    FOREIGN KEY(rowid) REFERENCES main(rowid) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE mandatory_exams (
@@ -48,7 +65,9 @@ CREATE TABLE mandatory_exams (
 CREATE TABLE main (
     rowid INTEGER NOT NULL,
     ects INTEGER NOT NULL,
+    institution INTEGER NOT NULL,
+    UNIQUE(rowid),
     PRIMARY KEY(rowid),
-    FOREIGN KEY(rowid) REFERENCES durations(rowid) DEFERRABLE INITIALLY DEFERRED,
-    UNIQUE(rowid)
+    FOREIGN KEY(institution) REFERENCES institutions(rowid) DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY(rowid) REFERENCES durations(rowid) DEFERRABLE INITIALLY DEFERRED
 );

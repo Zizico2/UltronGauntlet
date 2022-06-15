@@ -1,7 +1,10 @@
+use crate::lib::db::schema::institutions::phone_numbers;
+
 #[derive(Debug, Default)]
 pub(crate) struct Institution {
     pub(crate) code: Option<Code>,
     pub(crate) name: Option<Name>,
+    // ---------------------------------
     pub(crate) address: Option<Address>,
     pub(crate) phone_numbers: Option<PhoneNumberList>,
     pub(crate) email_addresses: Option<EmailAddressList>,
@@ -31,6 +34,13 @@ pub(crate) struct EmailAddress(String);
 impl From<&str> for EmailAddress {
     fn from(value: &str) -> Self {
         EmailAddress(value.into())
+    }
+}
+
+
+impl AsRef<str> for EmailAddress {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
@@ -70,6 +80,12 @@ impl From<&str> for PhoneNumber {
     }
 }
 
+impl AsRef<str> for PhoneNumber {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 impl From<String> for PhoneNumber {
     fn from(value: String) -> Self {
         PhoneNumber(value.into())
@@ -89,10 +105,15 @@ pub(crate) struct Address {
     lines: Vec<String>,
 }
 
-
 impl Address {
     pub fn push(&mut self, value: String) {
         self.lines.push(value);
+    }
+}
+
+impl From<Address> for Vec<String> {
+    fn from(address: Address) -> Self {
+        address.lines
     }
 }
 
@@ -121,5 +142,11 @@ pub(crate) struct Name(String);
 impl From<&str> for Name {
     fn from(value: &str) -> Self {
         Name(value.into())
+    }
+}
+
+impl From<Name> for String {
+    fn from(val: Name) -> Self {
+        val.0
     }
 }

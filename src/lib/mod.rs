@@ -19,9 +19,12 @@ use voyager::{Collector, Crawler, CrawlerConfig, RequestDelay, Response, Scraper
 
 use self::characteristics::institution;
 use self::characteristics::institution::Address;
+use self::characteristics::institution::EmailAddress;
+use self::characteristics::institution::PhoneNumber;
 use self::characteristics::institution::PhoneNumberList;
 use self::characteristics::Institution;
 use self::db::create_duration;
+use self::db::create_institution;
 use self::db::create_main;
 use self::db::create_mandatory_exam;
 use self::db::{create_cnaef_area, create_exam, establish_connection};
@@ -355,62 +358,91 @@ pub async fn handle_results(collector: &mut MyCollector) {
 
     while let Some(output) = collector.next().await {
         if let Ok(course) = output {
-            if let Some(ects) = course.characteristics.ects {
-                let ects: u16 = ects.into();
-                let main = create_main(&mut conn, ects as i32);
+            if let (
+                Some(code),
+                Some(name),
+                Some(address),
+                Some(phone_numbers),
+                //Some(email_addresses),
+            ) = (
+                course.characteristics.institution.code,
+                course.characteristics.institution.name,
+                course.characteristics.institution.address,
+                course.characteristics.institution.phone_numbers,
+                //course.characteristics.institution.email_addresses,
+            ) {
+                let code: String = code.into();
+                let name: String = name.into();
+                let address: Vec<String> = address.into();
+                if let Ok(institution) = create_institution(
+                    &mut conn,
+                    &code,
+                    &name,
+                    address.iter(),
+                    phone_numbers.into_iter(),
+                    //  email_addresses.into_iter(),
+                    vec![""].into_iter(),
+                ) {
+                    if let Some(ects) = course.characteristics.ects {
+                        let ects: u16 = ects.into();
+                        let main = create_main(&mut conn, ects as i32, institution.rowid);
 
-                if let Ok(main) = main {
-                    if let Some(name) = course.characteristics.duration.unit {
-                        let name: String = name.into();
-                        let duration_unit = create_duration_unit(&mut conn, &name);
-                        if let Some(ammount) = course.characteristics.duration.ammount {
-                            if let Ok(duration_unit) = duration_unit {
-                                let ammount: u8 = ammount.into();
-                                create_duration(
-                                    &mut conn,
-                                    main.rowid,
-                                    duration_unit.rowid,
-                                    ammount as i32,
-                                );
+                        if let Ok(main) = main {
+                            if let Some(name) = course.characteristics.duration.unit {
+                                let name: String = name.into();
+                                let duration_unit = create_duration_unit(&mut conn, &name);
+                                if let Some(ammount) = course.characteristics.duration.ammount {
+                                    if let Ok(duration_unit) = duration_unit {
+                                        let ammount: u8 = ammount.into();
+                                        create_duration(
+                                            &mut conn,
+                                            main.rowid,
+                                            duration_unit.rowid,
+                                            ammount as i32,
+                                        );
+                                    }
+                                }
                             }
-                        }
-                    }
 
-                    if let Some(code) = course.characteristics.cnaef_area.code {
-                        if let Some(name) = course.characteristics.cnaef_area.name {
-                            let code: String = code.into();
-                            let name: String = name.into();
-                            create_cnaef_area(&mut conn, &code, &name);
-                        }
-                    }
+                            if let Some(code) = course.characteristics.cnaef_area.code {
+                                if let Some(name) = course.characteristics.cnaef_area.name {
+                                    let code: String = code.into();
+                                    let name: String = name.into();
+                                    create_cnaef_area(&mut conn, &code, &name);
+                                }
+                            }
 
-                    if let Some(exams) = course.exams.optional {
-                        for exams in exams {
-                            for exam_group in exams {
-                                for exam in exam_group {
-                                    if let Some(code) = exam.code {
-                                        if let Some(name) = exam.name {
-                                            let code: String = code.into();
-                                            let name: String = name.into();
+                            if let Some(exams) = course.exams.optional {
+                                for exams in exams {
+                                    for exam_group in exams {
+                                        for exam in exam_group {
+                                            if let Some(code) = exam.code {
+                                                if let Some(name) = exam.name {
+                                                    let code: String = code.into();
+                                                    let name: String = name.into();
 
-                                            create_exam(&mut conn, &code, &name);
+                                                    create_exam(&mut conn, &code, &name);
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
 
-                    if let Some(exams) = course.exams.mandatory {
-                        for exam in exams {
-                            if let Some(code) = exam.code {
-                                if let Some(name) = exam.name {
-                                    let code: String = code.into();
-                                    let name: String = name.into();
-                                    if let Ok(exam) = create_exam(&mut conn, &code, &name) {
-                                        create_mandatory_exam(&mut conn, exam.rowid, main.rowid);
-                                    } else {
-                                        info!("{}", name);
+                            if let Some(exams) = course.exams.mandatory {
+                                for exam in exams {
+                                    if let Some(code) = exam.code {
+                                        if let Some(name) = exam.name {
+                                            let code: String = code.into();
+                                            let name: String = name.into();
+                                            if let Ok(exam) = create_exam(&mut conn, &code, &name) {
+                                                create_mandatory_exam(
+                                                    &mut conn, exam.rowid, main.rowid,
+                                                );
+                                            } else {
+                                                info!("{}", name);
+                                            }
+                                        }
                                     }
                                 }
                             }
