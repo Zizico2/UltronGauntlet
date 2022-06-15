@@ -45,7 +45,6 @@ table! {
 }
 
 joinable!(durations -> duration_units (unit));
-joinable!(durations -> main (rowid));
 joinable!(mandatory_exams -> exams (exam));
 joinable!(mandatory_exams -> main (main));
 

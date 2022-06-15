@@ -1,5 +1,6 @@
 use diesel::prelude::*;
-use diesel::sqlite::SqliteConnection;
+use diesel::query_builder::{AsQuery, InsertStatement};
+use diesel::sqlite::{Sqlite, SqliteConnection};
 use dotenv::dotenv;
 use std::fmt::Display;
 use std::{env, fs};
@@ -46,12 +47,6 @@ pub fn create_duration_unit<'a>(
     use schema::duration_units::dsl::*;
 
     let new_duration_unit = NewDurationUnit { name: new_name };
-
-    /*
-    let result = diesel::replace_into(duration_units::table)
-        .values(&new_duration_unit)
-        .get_result(conn);
-    */
 
     let result = conn.transaction(|conn| {
         let mut result = diesel::insert_into(duration_units::table)

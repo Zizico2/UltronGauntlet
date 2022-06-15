@@ -4,6 +4,7 @@ use anyhow::Result;
 use characteristics::{characteristics_section, Characteristics};
 use diesel_migrations::embed_migrations;
 use diesel_migrations::EmbeddedMigrations;
+use ego_tree::NodeRef;
 use exams::{exams_section, Exams};
 use futures::StreamExt;
 use reqwest::Url;
@@ -12,9 +13,14 @@ use std::fmt::Debug;
 use std::result::Result::Ok;
 use tracing::info;
 use utils::charset_middleware::HtmlCharsetWindows1252;
+use voyager::scraper::Node;
 use voyager::scraper::{ElementRef, Selector};
 use voyager::{Collector, Crawler, CrawlerConfig, RequestDelay, Response, Scraper};
 
+use self::characteristics::institution;
+use self::characteristics::institution::Address;
+use self::characteristics::institution::PhoneNumberList;
+use self::characteristics::Institution;
 use self::db::create_duration;
 use self::db::create_main;
 use self::db::create_mandatory_exam;
@@ -108,52 +114,55 @@ impl Scraper for MyScraper {
     ) -> Result<Option<Self::Output>> {
         let html = response.html();
         match response.state {
-            Some(state) => match state {
-                MyScraperState::FindingLetters => {
-                    let letters = html.select(&self.letter_link_selector);
-                    for node in letters {
-                        let url = &mut response.response_url;
+            Some(state) => {
+                match state {
+                    MyScraperState::FindingLetters => {
+                        let letters = html.select(&self.letter_link_selector);
+                        for node in letters {
+                            let url = &mut response.response_url;
 
-                        let mut href = node.value().attr("href").unwrap().splitn(2, "?");
-                        {
-                            let mut path_segments = url.path_segments_mut().unwrap();
-                            path_segments.pop();
-                            path_segments.push(href.next().unwrap());
+                            let mut href = node.value().attr("href").unwrap().splitn(2, "?");
+                            {
+                                let mut path_segments = url.path_segments_mut().unwrap();
+                                path_segments.pop();
+                                path_segments.push(href.next().unwrap());
+                            }
+                            url.set_query(href.last());
+
+                            crawler.visit_with_state(url.clone(), MyScraperState::IteratingCourses);
                         }
-                        url.set_query(href.last());
-
-                        crawler.visit_with_state(url.clone(), MyScraperState::IteratingCourses);
                     }
-                }
 
-                MyScraperState::IteratingCourses => {
-                    let courses = html.select(&self.course_link_selector);
-                    for node in courses {
-                        let url = &mut response.response_url;
+                    MyScraperState::IteratingCourses => {
+                        let courses = html.select(&self.course_link_selector);
+                        for node in courses {
+                            let url = &mut response.response_url;
 
-                        let mut href = node.value().attr("href").unwrap().splitn(2, "?");
-                        {
-                            let mut path_segments = url.path_segments_mut().unwrap();
-                            path_segments.pop();
-                            path_segments.push(href.next().unwrap());
+                            let mut href = node.value().attr("href").unwrap().splitn(2, "?");
+                            {
+                                let mut path_segments = url.path_segments_mut().unwrap();
+                                path_segments.pop();
+                                path_segments.push(href.next().unwrap());
+                            }
+                            url.set_query(href.last());
+                            crawler.visit_with_state(url.clone(), MyScraperState::ScrapingCourse);
                         }
-                        url.set_query(href.last());
-                        crawler.visit_with_state(url.clone(), MyScraperState::ScrapingCourse);
                     }
-                }
-                MyScraperState::ScrapingCourse => {
-                    let mut entry = Entry::new(response.request_url.clone().into());
-                    let url: String = response.request_url.to_string();
-                    dbg!(url);
+                    MyScraperState::ScrapingCourse => {
+                        let mut entry = Entry::new(response.request_url.clone().into());
+                        let url: String = response.request_url.to_string();
+                        dbg!(url);
 
-                    for header in html.select(&self.main_headers_selector) {
-                        match header.inner_html().as_str() {
+                        for header in html.select(&self.main_headers_selector) {
+                            match header.inner_html().as_str() {
                             "Endereço e Contactos da Instituição" => {
-                                institution_contacts_section(header);
+                                let mut iter = header.next_siblings();
+                                entry.characteristics.set_institution_meh(institution_contacts_section(&mut iter));
                             }
                             "Características do par Instituição/Curso" => {
                                 let mut iter = header.next_siblings();
-                                entry.characteristics = characteristics_section(&mut iter);
+                                //TODO
+                                entry.characteristics.set_most_of_them(characteristics_section(&mut iter));
                             }
                             "Provas de Ingresso" => {
                                 let mut iter = header.next_siblings();
@@ -177,42 +186,98 @@ impl Scraper for MyScraper {
                                 info!("UNKNOWN HEADER: {}", text);
                             }
                         }
+                        }
+
+                        entry.characteristics.course.name =
+                            match html.select(&self.course_name_selector).next() {
+                                Some(element_ref) => match element_ref.first_child() {
+                                    Some(node_ref) => match node_ref.value().as_text() {
+                                        Some(text) => Some((text as &str).into()),
+                                        None => None,
+                                    },
+                                    None => None,
+                                },
+                                None => None,
+                            };
+
+                        entry.characteristics.institution.name =
+                            match html.select(&self.institution_name_selector).next() {
+                                Some(element_ref) => match element_ref.first_child() {
+                                    Some(node_ref) => match node_ref.value().as_text() {
+                                        Some(text) => Some((text as &str).into()),
+                                        None => None,
+                                    },
+                                    None => None,
+                                },
+                                None => None,
+                            };
+
+                        return Ok(Some(entry));
                     }
-
-                    entry.characteristics.course.name =
-                        match html.select(&self.course_name_selector).next() {
-                            Some(element_ref) => match element_ref.first_child() {
-                                Some(node_ref) => match node_ref.value().as_text() {
-                                    Some(text) => Some((text as &str).into()),
-                                    None => None,
-                                },
-                                None => None,
-                            },
-                            None => None,
-                        };
-
-                    entry.characteristics.institution.name =
-                        match html.select(&self.institution_name_selector).next() {
-                            Some(element_ref) => match element_ref.first_child() {
-                                Some(node_ref) => match node_ref.value().as_text() {
-                                    Some(text) => Some((text as &str).into()),
-                                    None => None,
-                                },
-                                None => None,
-                            },
-                            None => None,
-                        };
-
-                    return Ok(Some(entry));
                 }
-            },
+            }
             None => {}
         }
         Ok(None)
     }
 }
 
-fn institution_contacts_section(element: ElementRef) {}
+fn institution_contacts_section<'a>(
+    iter: &mut impl Iterator<Item = NodeRef<'a, Node>>,
+) -> Institution {
+    let mut institution = Institution::default();
+    while let Some(node) = iter.next() {
+        match node.value().as_text() {
+            Some(text) => match institution.address {
+                Some(ref mut address) => {
+                    address.push(text.to_string());
+                    info!("{}", text as &str);
+                }
+                None => {
+                    let mut address = Address::default();
+                    address.push(text.to_string());
+                    institution.address = Some(address);
+                    info!("{}", text as &str);
+                }
+            },
+            None => break,
+        }
+        // should be a br
+        iter.next();
+    }
+
+    for node in iter {
+        match node.value() {
+            Node::Text(text) => {
+                if let Some(phone_numbers) = (text as &str).strip_prefix("Tel: ") {
+                    let phone_numbers = phone_numbers.split(", ");
+                    match institution.phone_numbers {
+                        Some(ref mut phone_number_list) => {
+                            for phone_number in phone_numbers {
+                                let phone_number = remove_whitespace(phone_number);
+                                info!("{}", phone_number);
+                                phone_number_list.push(phone_number);
+                            }
+                        }
+                        None => {
+                            let mut phone_number_list = PhoneNumberList::default();
+                            for phone_number in phone_numbers {
+                                let phone_number = remove_whitespace(phone_number);
+                                info!("{}", phone_number);
+                                phone_number_list.push(phone_number);
+                            }
+                            institution.phone_numbers = Some(phone_number_list);
+                        }
+                    }
+                } else if let Some(_faxes) = (text as &str).strip_prefix("Fax: ") {
+                }
+            }
+            Node::Element(element) => {}
+            _ => {}
+        }
+    }
+    institution
+}
 fn statistics_section(element: ElementRef) {}
 fn information_section(element: ElementRef) {}
 
@@ -295,7 +360,6 @@ pub async fn handle_results(collector: &mut MyCollector) {
                 let main = create_main(&mut conn, ects as i32);
 
                 if let Ok(main) = main {
-                    //dbg!(course);
                     if let Some(name) = course.characteristics.duration.unit {
                         let name: String = name.into();
                         let duration_unit = create_duration_unit(&mut conn, &name);
@@ -356,4 +420,8 @@ pub async fn handle_results(collector: &mut MyCollector) {
             }
         }
     }
+}
+
+fn remove_whitespace(s: &str) -> String {
+    s.chars().filter(|c| !c.is_whitespace()).collect()
 }

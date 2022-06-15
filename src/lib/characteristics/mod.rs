@@ -31,6 +31,28 @@ pub(crate) struct Characteristics {
     pub(crate) contest: Option<Contest>,
 }
 
+impl Characteristics {
+    //TODO
+    pub fn set_institution_meh(&mut self, institution: Institution) {
+        self.institution.address = institution.address;
+        self.institution.phone_numbers = institution.phone_numbers;
+        self.institution.email_addresses = institution.email_addresses;
+    }
+
+    //TODO
+    pub fn set_most_of_them(&mut self, chars: Characteristics) {
+        self.course = chars.course;
+        self.institution.code = chars.institution.code;
+        self.institution.name = chars.institution.name;
+        self.degree = chars.degree;
+        self.cnaef_area = chars.cnaef_area;
+        self.duration = chars.duration;
+        self.ects = chars.ects;
+        self.education_type = chars.education_type;
+        self.contest = chars.contest;
+    }
+}
+
 pub(crate) fn characteristics_section<'a>(
     it: &mut impl Iterator<Item = NodeRef<'a, Node>>,
 ) -> Characteristics {
