@@ -1,62 +1,63 @@
 table! {
     cnaef_areas (rowid) {
         rowid -> Integer,
-        code -> Text,
-        name -> Text,
+        code -> Nullable<Text>,
+        name -> Nullable<Text>,
     }
 }
 
 table! {
     duration_units (rowid) {
         rowid -> Integer,
-        name -> Text,
+        name -> Nullable<Text>,
     }
 }
 
 table! {
     durations (rowid) {
         rowid -> Integer,
-        unit -> Integer,
-        ammount -> Integer,
+        unit -> Nullable<Integer>,
+        ammount -> Nullable<Integer>,
     }
 }
 
 table! {
     exams (rowid) {
         rowid -> Integer,
-        code -> Text,
-        name -> Text,
+        code -> Nullable<Text>,
+        name -> Nullable<Text>,
     }
 }
 
 table! {
     institutions (rowid) {
         rowid -> Integer,
-        code -> Text,
-        name -> Text,
-        address -> Text,
-        phone_numbers -> Text,
-        email_addresses -> Text,
+        code -> Nullable<Text>,
+        name -> Nullable<Text>,
+        address -> Nullable<Text>,
+        phone_numbers -> Nullable<Text>,
+        email_addresses -> Nullable<Text>,
     }
 }
 
 table! {
     main (rowid) {
         rowid -> Integer,
-        ects -> Integer,
-        institution -> Integer,
+        ects -> Nullable<Integer>,
+        institution -> Nullable<Integer>,
     }
 }
 
 table! {
     mandatory_exams (rowid) {
         rowid -> Integer,
-        exam -> Integer,
-        main -> Integer,
+        exam -> Nullable<Integer>,
+        main -> Nullable<Integer>,
     }
 }
 
 joinable!(durations -> duration_units (unit));
+joinable!(main -> institutions (institution));
 joinable!(mandatory_exams -> exams (exam));
 joinable!(mandatory_exams -> main (main));
 

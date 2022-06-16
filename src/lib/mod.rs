@@ -20,6 +20,7 @@ use voyager::{Collector, Crawler, CrawlerConfig, RequestDelay, Response, Scraper
 use self::characteristics::institution;
 use self::characteristics::institution::Address;
 use self::characteristics::institution::EmailAddress;
+use self::characteristics::institution::EmailAddressList;
 use self::characteristics::institution::PhoneNumber;
 use self::characteristics::institution::PhoneNumberList;
 use self::characteristics::Institution;
@@ -271,7 +272,28 @@ fn institution_contacts_section<'a>(
                 } else if let Some(_faxes) = (text as &str).strip_prefix("Fax: ") {
                 }
             }
-            Node::Element(_element) => {}
+            Node::Element(element) => match element.name() {
+                "a" => {
+                    if let Some(href) = element.attr("href") {
+                        if let Some(email_addresses) = href.strip_prefix("mailto:") {
+                            let email_addresses = email_addresses.split("; ");
+                            for email_address in email_addresses {
+                                match institution.email_addresses {
+                                    Some(ref mut email_address_list) => {
+                                        email_address_list.push(email_address.trim().to_string());
+                                    }
+                                    None => {
+                                        let mut email_address_list = EmailAddressList::default();
+                                        email_address_list.push(email_address.trim().to_string());
+                                        institution.email_addresses = Some(email_address_list);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -359,13 +381,13 @@ pub async fn handle_results(collector: &mut MyCollector) {
                 Some(name),
                 Some(address),
                 Some(phone_numbers),
-                //Some(email_addresses),
+                Some(email_addresses),
             ) = (
                 course.characteristics.institution.code,
                 course.characteristics.institution.name,
                 course.characteristics.institution.address,
                 course.characteristics.institution.phone_numbers,
-                //course.characteristics.institution.email_addresses,
+                course.characteristics.institution.email_addresses,
             ) {
                 let code: String = code.into();
                 let name: String = name.into();
@@ -376,8 +398,7 @@ pub async fn handle_results(collector: &mut MyCollector) {
                     &name,
                     address.iter(),
                     phone_numbers.into_iter(),
-                    //  email_addresses.into_iter(),
-                    vec![""].into_iter(),
+                    email_addresses.into_iter(),
                 ) {
                     if let Some(ects) = course.characteristics.ects {
                         let ects: u16 = ects.into();

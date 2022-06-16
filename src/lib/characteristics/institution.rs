@@ -18,6 +18,12 @@ pub(crate) struct Institution {
 #[derive(Debug, Default)]
 pub(crate) struct EmailAddressList(Vec<EmailAddress>);
 
+impl EmailAddressList {
+    pub fn push(&mut self, value: String) {
+        self.0.push(value.into());
+    }
+}
+
 impl IntoIterator for EmailAddressList {
     type Item = EmailAddress;
 
@@ -33,6 +39,12 @@ pub(crate) struct EmailAddress(String);
 
 impl From<&str> for EmailAddress {
     fn from(value: &str) -> Self {
+        EmailAddress(value.into())
+    }
+}
+
+impl From<String> for EmailAddress {
+    fn from(value: String) -> Self {
         EmailAddress(value.into())
     }
 }
