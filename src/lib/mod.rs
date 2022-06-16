@@ -233,14 +233,12 @@ fn institution_contacts_section<'a>(
         match node.value().as_text() {
             Some(text) => match institution.address {
                 Some(ref mut address) => {
-                    address.push(text.to_string());
-                    info!("{}", text as &str);
+                    address.push(text.trim().to_string());
                 }
                 None => {
                     let mut address = Address::default();
-                    address.push(text.to_string());
+                    address.push(text.trim().to_string());
                     institution.address = Some(address);
-                    info!("{}", text as &str);
                 }
             },
             None => break,
@@ -258,16 +256,14 @@ fn institution_contacts_section<'a>(
                         Some(ref mut phone_number_list) => {
                             for phone_number in phone_numbers {
                                 let phone_number = remove_whitespace(phone_number);
-                                info!("{}", phone_number);
-                                phone_number_list.push(phone_number);
+                                phone_number_list.push(phone_number.trim().to_string());
                             }
                         }
                         None => {
                             let mut phone_number_list = PhoneNumberList::default();
                             for phone_number in phone_numbers {
                                 let phone_number = remove_whitespace(phone_number);
-                                info!("{}", phone_number);
-                                phone_number_list.push(phone_number);
+                                phone_number_list.push(phone_number.trim().to_string());
                             }
                             institution.phone_numbers = Some(phone_number_list);
                         }
@@ -275,7 +271,7 @@ fn institution_contacts_section<'a>(
                 } else if let Some(_faxes) = (text as &str).strip_prefix("Fax: ") {
                 }
             }
-            Node::Element(element) => {}
+            Node::Element(_element) => {}
             _ => {}
         }
     }
@@ -440,7 +436,6 @@ pub async fn handle_results(collector: &mut MyCollector) {
                                                     &mut conn, exam.rowid, main.rowid,
                                                 );
                                             } else {
-                                                info!("{}", name);
                                             }
                                         }
                                     }
