@@ -1,5 +1,5 @@
 CREATE TABLE exams (
-    rowid INTEGER NOT NULL,
+    rowid INTEGER NOT NULL UNIQUE,
     code TEXT UNIQUE,
     name TEXT UNIQUE,
     PRIMARY KEY(rowid)
