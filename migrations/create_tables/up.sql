@@ -1,3 +1,5 @@
+PRAGMA foreign_keys = ON;
+
 CREATE TABLE exams (
     rowid INTEGER NOT NULL UNIQUE,
     code TEXT UNIQUE,
@@ -20,10 +22,10 @@ CREATE TABLE duration_units (
 
 CREATE TABLE durations (
     rowid INTEGER NOT NULL UNIQUE,
-    unit INTEGER UNIQUE,
-    ammount INTEGER UNIQUE,
+    unit INTEGER,
+    ammount INTEGER,
     PRIMARY KEY(rowid),
-    FOREIGN KEY(rowid) REFERENCES main(rowid),
+    FOREIGN KEY(rowid) REFERENCES main(rowid) DEFERRABLE INITIALLY DEFERRED,
     FOREIGN KEY(unit) REFERENCES duration_units(rowid)
 );
 
@@ -55,5 +57,15 @@ CREATE TABLE main (
     institution INTEGER,
     PRIMARY KEY(rowid),
     FOREIGN KEY(institution) REFERENCES institutions(rowid),
-    FOREIGN KEY(rowid) REFERENCES durations(rowid)
+    FOREIGN KEY(rowid) REFERENCES durations(rowid) DEFERRABLE INITIALLY DEFERRED
 );
+
+CREATE VIEW expanded_main AS
+SELECT main.ects, institutions.code as institution_code, institutions.name as institution_name, durations.ammount as duration_ammount, duration_units.name as duration_unit
+FROM main
+INNER JOIN institutions
+ON institution = institutions.rowid
+INNER JOIN duration_units
+ON durations.unit = duration_units.rowid
+INNER JOIN durations
+ON durations.rowid = main.rowid;
