@@ -1,4 +1,6 @@
 -- SQLite
+PRAGMA foreign_keys = ON;
+
 INSERT INTO institutions (code, name, address, phone_numbers, email_addresses)
 VALUES ("INST1", "INSTNAME1", "ADDR1", "PHONE1", "EMAIL1");
 
