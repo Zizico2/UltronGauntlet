@@ -1,38 +1,68 @@
 table! {
-    cnaef_areas (rowid) {
-        rowid -> Integer,
-        code -> Nullable<Text>,
+    cnaef_areas (code) {
+        code -> Text,
         name -> Nullable<Text>,
     }
 }
 
 table! {
-    duration_units (rowid) {
-        rowid -> Integer,
+    contests (name) {
+        name -> Text,
+    }
+}
+
+table! {
+    course_institution (institution, course) {
+        ects -> Nullable<Integer>,
+        institution -> Text,
+        course -> Text,
+    }
+}
+
+table! {
+    courses (code) {
+        code -> Text,
         name -> Nullable<Text>,
     }
 }
 
 table! {
-    durations (rowid) {
-        rowid -> Integer,
-        unit -> Nullable<Integer>,
+    degrees (name) {
+        name -> Text,
+    }
+}
+
+table! {
+    duration_units (name) {
+        name -> Text,
+    }
+}
+
+table! {
+    durations (institution, course) {
+        institution -> Text,
+        course -> Text,
+        unit -> Nullable<Text>,
         ammount -> Nullable<Integer>,
     }
 }
 
 table! {
-    exams (rowid) {
-        rowid -> Integer,
-        code -> Nullable<Text>,
+    education_types (name) {
+        name -> Text,
+    }
+}
+
+table! {
+    exams (code) {
+        code -> Text,
         name -> Nullable<Text>,
     }
 }
 
 table! {
-    institutions (rowid) {
-        rowid -> Integer,
-        code -> Nullable<Text>,
+    institutions (code) {
+        code -> Text,
         name -> Nullable<Text>,
         address -> Nullable<Text>,
         phone_numbers -> Nullable<Text>,
@@ -41,32 +71,29 @@ table! {
 }
 
 table! {
-    main (rowid) {
-        rowid -> Integer,
-        ects -> Nullable<Integer>,
-        institution -> Nullable<Integer>,
-    }
-}
-
-table! {
     mandatory_exams (rowid) {
         rowid -> Integer,
-        exam -> Nullable<Integer>,
-        main -> Nullable<Integer>,
+        exam -> Nullable<Text>,
+        institution -> Text,
+        course -> Text,
     }
 }
 
+joinable!(course_institution -> courses (course));
+joinable!(course_institution -> institutions (institution));
 joinable!(durations -> duration_units (unit));
-joinable!(main -> institutions (institution));
 joinable!(mandatory_exams -> exams (exam));
-joinable!(mandatory_exams -> main (main));
 
 allow_tables_to_appear_in_same_query!(
     cnaef_areas,
+    contests,
+    course_institution,
+    courses,
+    degrees,
     duration_units,
     durations,
+    education_types,
     exams,
     institutions,
-    main,
     mandatory_exams,
 );
