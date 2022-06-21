@@ -71,9 +71,8 @@ table! {
 }
 
 table! {
-    mandatory_exams (rowid) {
-        rowid -> Integer,
-        exam -> Nullable<Text>,
+    mandatory_exams (exam, institution, course) {
+        exam -> Text,
         institution -> Text,
         course -> Text,
     }

@@ -2,13 +2,13 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE exams (
     code TEXT NOT NULL UNIQUE,
-    name TEXT UNIQUE,
+    name TEXT,
     PRIMARY KEY(code)
 );
 
 CREATE TABLE cnaef_areas (
     code TEXT NOT NULL UNIQUE,
-    name TEXT UNIQUE,
+    name TEXT,
     PRIMARY KEY(code)
 );
 
@@ -49,33 +49,31 @@ CREATE TABLE durations (
 
 CREATE TABLE institutions (
     code TEXT NOT NULL UNIQUE,
-    name TEXT UNIQUE,
+    name TEXT,
     /* should be an array of lines - abstract as table */
-    address TEXT UNIQUE,
+    address TEXT,
     /* should be an array of numbers - abstract as table */
-    phone_numbers TEXT UNIQUE,
+    phone_numbers TEXT,
     /* should be an array of email addresses - abstract as table */
-    email_addresses TEXT UNIQUE,
+    email_addresses TEXT,
     PRIMARY KEY(code)
 );
 
-/* rowid pk? */
 CREATE TABLE mandatory_exams (
-    rowid INTEGER NOT NULL UNIQUE,
-    exam TEXT UNIQUE,
+    exam TEXT NOT NULL,
     /**/
     institution TEXT NOT NULL,
     course TEXT NOT NULL,
     /**/
-    PRIMARY KEY(rowid)
+    UNIQUE (exam, institution, course),
+    PRIMARY KEY(exam, institution, course),
     FOREIGN KEY(exam) REFERENCES exams(code),
-    UNIQUE(institution, course),
     FOREIGN KEY(institution, course) REFERENCES course_institution(institution, course)
 );
 
 CREATE TABLE courses (
     code TEXT NOT NULL UNIQUE,
-    name TEXT UNIQUE,
+    name TEXT,
     PRIMARY KEY(code)
 );
 
@@ -106,4 +104,4 @@ ON course_institution.institution = institutions.code
 INNER JOIN duration_units
 ON durations.unit = duration_units.name
 INNER JOIN durations
-ON durations.rowid = course_institution.rowid;
+ON (durations.institution, durations.course) = (course_institution.institution, course_institution.course);
