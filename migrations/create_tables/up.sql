@@ -13,7 +13,7 @@ CREATE TABLE cnaef_areas (
 );
 
 CREATE TABLE degrees (
-    name TEXT NOT NULL UNIQUE, /* Licenciatura -     1º ciclo */
+    name TEXT NOT NULL UNIQUE, /* Licenciatura - 1º ciclo */
     PRIMARY KEY(name)
 );
 
@@ -27,7 +27,11 @@ CREATE TABLE contests (
     PRIMARY KEY(name)
 );
 
-/* Some tables to handle prerequisites */
+/* START - Some tables to handle prerequisites */
+
+
+
+/* END */
 
 CREATE TABLE duration_units (
     name TEXT NOT NULL UNIQUE,
@@ -92,6 +96,8 @@ CREATE VIEW expanded_course_institution AS
 SELECT course_institution.ects,
 institutions.code as institution_code,
 institutions.name as institution_name,
+courses.code as course_code,
+courses.name as course_name,
 
 durations.ammount as duration_ammount,
 
@@ -101,7 +107,22 @@ duration_units.name as duration_unit
 FROM course_institution
 INNER JOIN institutions
 ON course_institution.institution = institutions.code
+INNER JOIN courses
+ON course_institution.course = courses.code
 INNER JOIN duration_units
 ON durations.unit = duration_units.name
 INNER JOIN durations
 ON (durations.institution, durations.course) = (course_institution.institution, course_institution.course);
+
+
+CREATE TRIGGER insert_expanded_course_institution
+    INSTEAD OF INSERT ON expanded_course_institution
+BEGIN
+    -- insert the new artist first
+    -- INSERT INTO Artists(Name)
+    -- VALUES(NEW.ArtistName);
+    
+    -- use the artist id to insert a new album
+    -- INSERT INTO Albums(Title, ArtistId)
+    -- VALUES(NEW.AlbumTitle, last_insert_rowid());
+END;
